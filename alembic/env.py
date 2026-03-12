@@ -12,6 +12,7 @@ from sqlalchemy import create_engine, pool
 
 from app.core.config import get_settings
 from app.db.base import Base
+import app.models # noqa:F401 - registers all models with Base.metadata
 
 # gives access to values in alembic.ini
 config = context.config
