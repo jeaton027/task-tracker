@@ -18,11 +18,13 @@ dependencies = [
   "python-jose[cryptography]>=3.3,<3.4",
   "passlib[bcrypt]>=1.7,<1.8",
   "python-multipart>=0.0.17,<0.0.18",
+  "email-validator>=2.0",
 ]
 
 [project.optional-dependencies]
 dev = [
   "pytest>=8.3,<8.4",
+  "anyio[trio]>=4.0",
   "pytest-cov>=6.0,<6.1",
   "httpx>=0.28,<0.29",
   "ruff>=0.7,<0.8",

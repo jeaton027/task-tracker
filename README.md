@@ -65,103 +65,103 @@ Request → API (router) → Service → Repository → Database
 
 ## Roadmap
 
-### ✅ Phase 0 — Scaffold
-- [x] Project structure, FastAPI app, CORS middleware
-- [x] Pydantic settings with `.env` support
-- [x] Versioned API routing (`/api/v1/`)
-- [x] Health check endpoint
-- [x] Docker + Docker Compose (API + PostgreSQL)
-- [x] pytest setup with integration test for health check
+### Phase 0 — Scaffold
+- ~~Project structure, FastAPI app, CORS middleware~~
+- ~~Pydantic settings with `.env` support~~
+- ~~Versioned API routing (`/api/v1/`)~~
+- ~~Health check endpoint~~
+- ~~Docker + Docker Compose (API + PostgreSQL)~~
+- ~~pytest setup with integration test for health check~~
 
 ---
 
-### 🔧 Phase 1 — Database Foundation
+### Phase 1 — Database Foundation
 > Alembic, SQLAlchemy async sessions, JWT auth
 
-- [ ] **Step 1** — Configure Alembic + wire up async DB session (`db/session.py`, `db/base.py`, `alembic.ini`)
-- [ ] **Step 2** — `User` model + first Alembic migration
-- [ ] **Step 3** — Auth endpoints: register, login, refresh token, logout
+- **Step 1** — Configure Alembic + wire up async DB session (`db/session.py`, `db/base.py`, `alembic.ini`)
+- **Step 2** — `User` model + first Alembic migration
+- **Step 3** — Auth endpoints: register, login, refresh token, logout
   - Password hashing (passlib/bcrypt)
   - JWT creation and validation (python-jose)
   - `get_current_user` dependency for protected routes
 
 ---
 
-### 🗂️ Phase 2 — Habit Data Model
+### Phase 2 — Habit Data Model
 > SQLAlchemy relationships, many-to-many joins, Pydantic schemas
 
-- [ ] **Step 4** — `Category` model + CRUD (default: Morning / Day / Evening)
-- [ ] **Step 5** — `Tag` model + CRUD (freeform, user-owned)
-- [ ] **Step 6** — `Habit` model + CRUD
+- **Step 4** — `Category` model + CRUD (default: Morning / Day / Evening)
+- **Step 5** — `Tag` model + CRUD (freeform, user-owned)
+- **Step 6** — `Habit` model + CRUD
   - Fields: `name`, `description`, `mode` (DO/AVOID), `frequency` (daily/weekly/monthly/custom), `start_date`, `end_date` (optional), `category_id`, `is_active`
-- [ ] **Step 7** — Habit ↔ Tag many-to-many association + migration
+- **Step 7** — Habit ↔ Tag many-to-many association + migration
 
 ---
 
-### 📋 Phase 3 — Daily Tracking
+### Phase 3 — Daily Tracking
 > Date logic, business rules, service layer patterns
 
-- [ ] **Step 8** — `HabitLog` model + migration
-- [ ] **Step 9** — Check-in endpoints
+- **Step 8** — `HabitLog` model + migration
+- **Step 9** — Check-in endpoints
   - `GET /habits/today` — all habits due today with current status
   - `POST /habits/{id}/log` — mark a habit done
   - `DELETE /habits/{id}/log` — unmark a habit (supports grace period)
 
 ---
 
-### 📅 Phase 4 — Calendar Views
+### Phase 4 — Calendar Views
 > Date aggregation, query optimization
 
-- [ ] **Step 10** — Weekly calendar endpoint
+- **Step 10** — Weekly calendar endpoint
   - `GET /calendar/weekly?date=YYYY-MM-DD` — 7-day view with red/green status per habit
-- [ ] **Step 11** — Monthly per-habit calendar endpoint
+- **Step 11** — Monthly per-habit calendar endpoint
   - `GET /calendar/monthly?habit_id=X&month=YYYY-MM` — full month, day-by-day status
 
 ---
 
-### 🔥 Phase 5 — Streaks
+### Phase 5 — Streaks
 > Stateful tracking, computed fields
 
-- [ ] **Step 12** — Streak calculation (current streak + personal best per habit)
+- **Step 12** — Streak calculation (current streak + personal best per habit)
   - `GET /habits/{id}/stats` — streak, completion rate, longest run
 
 ---
 
-### ⚙️ Phase 6 — Advanced Habit Features
+### Phase 6 — Advanced Habit Features
 > Scheduling edge cases, soft overrides
 
-- [ ] **Step 13** — Vacation mode (`VacationPeriod` model — habits auto-skip, not fail, during a date range)
-- [ ] **Step 14** — Grace period (allow editing logs up to 3 days in the past)
+- **Step 13** — Vacation mode (`VacationPeriod` model — habits auto-skip, not fail, during a date range)
+- **Step 14** — Grace period (allow editing logs up to 3 days in the past)
 
 ---
 
-### ✅ Phase 7 — TODO Task List
+### Phase 7 — TODO Task List
 > Second item type, polymorphic data modeling
 
-- [ ] **Step 15** — `Task` model (one-time, non-recurring, with due date + priority)
-- [ ] **Step 16** — Task CRUD + completion endpoint
+- **Step 15** — `Task` model (one-time, non-recurring, with due date + priority)
+- **Step 16** — Task CRUD + completion endpoint
 
 ---
 
-### 📊 Phase 8 — Analytics & Notifications
+### Phase 8 — Analytics & Notifications
 > Aggregation queries, background jobs
 
-- [ ] **Step 17** — Analytics endpoints (completion rates, weakest/strongest habits, day-of-week patterns)
-- [ ] **Step 18** — Notification scaffolding (push / email — platform TBD)
+- **Step 17** — Analytics endpoints (completion rates, weakest/strongest habits, day-of-week patterns)
+- **Step 18** — Notification scaffolding (push / email — platform TBD)
 
 ---
 
-### 🤖 Phase 9 — AI Insights
+### Phase 9 — AI Insights
 > LLM API integration, prompt engineering
 
-- [ ] **Step 19** — AI-generated habit analysis (Claude or OpenAI) based on log history and patterns
+- **Step 19** — AI-generated habit analysis (Claude or OpenAI) based on log history and patterns
 
 ---
 
-### 🖥️ Phase 10 — React Frontend
+### Phase 10 — React Frontend
 > Full-stack integration
 
-- [ ] **Step 20+** — React app: habit list, daily check-in UI, weekly/monthly calendar views, streak display
+- **Step 20+** — React app: habit list, daily check-in UI, weekly/monthly calendar views, streak display
 
 ---
 
