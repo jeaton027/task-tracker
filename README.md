@@ -78,12 +78,12 @@ Request → API (router) → Service → Repository → Database
 ### Phase 1 — Database Foundation
 > Alembic, SQLAlchemy async sessions, JWT auth
 
-- **Step 1** — Configure Alembic + wire up async DB session (`db/session.py`, `db/base.py`, `alembic.ini`)
-- **Step 2** — `User` model + first Alembic migration
-- **Step 3** — Auth endpoints: register, login, refresh token, logout
-  - Password hashing (passlib/bcrypt)
-  - JWT creation and validation (python-jose)
-  - `get_current_user` dependency for protected routes
+- ~~**Step 1** — Configure Alembic + wire up async DB session (`db/session.py`, `db/base.py`, `alembic.ini`)~~
+- ~~**Step 2** — `User` model + first Alembic migration~~
+- ~~**Step 3** — Auth endpoints: register, login, refresh token, `/me`~~
+  - ~~Password hashing (bcrypt direct — SHA-256 pre-hash to handle 72-byte limit)~~
+  - ~~JWT creation and validation (python-jose)~~
+  - ~~`get_current_user` dependency for protected routes~~
 
 ---
 

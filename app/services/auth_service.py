@@ -27,7 +27,7 @@ async def register(db: AsyncSession, email: str, password: str) -> User:
 			status_code=status.HTTP_409_CONFLICT,
 			detail="An account with that email already exists.",
 		)
-	return await user_repository.creat(db, email=email, hashed_password=hash_password(password))
+	return await user_repository.create(db, email=email, hashed_password=hash_password(password))
 
 
 async def login(db: AsyncSession, email: str, password: str) -> TokenResponse:
@@ -43,7 +43,7 @@ async def login(db: AsyncSession, email: str, password: str) -> TokenResponse:
 		raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is inactive.")
 	
 	return TokenResponse(
-		access_token=create_accress_token(str(user.id)),
+		access_token=create_access_token(str(user.id)),
 		refresh_token=create_refresh_token(str(user.id)),
 	)
 
@@ -67,7 +67,7 @@ async def refresh(db: AsyncSession, refresh_token: str) -> TokenResponse:
 		raise exc
 	
 	return TokenResponse(
-		access_token=create_accress_token(str(user.id)),
+		access_token=create_access_token(str(user.id)),
 		refresh_token=create_refresh_token(str(user.id)),
 	)
 

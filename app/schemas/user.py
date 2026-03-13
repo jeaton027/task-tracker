@@ -21,5 +21,5 @@ class UserResponse(BaseModel):
 	id: uuid.UUID
 	email: str
 	is_active: bool
-	create_at: datetime
+	created_at: datetime
 	updated_at: datetime
