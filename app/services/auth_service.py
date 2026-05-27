@@ -16,6 +16,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.repositories import user_repository
 from app.schemas.token import TokenResponse
+from app.services.category_service import seed_defaults as _seed_default_categories
 
 # HTTPBearer reads the "Auth: bearer <token>" header from the request
 # suto_error=true : fastapi returns 403 automatically if header is missing
@@ -27,7 +28,9 @@ async def register(db: AsyncSession, email: str, password: str) -> User:
 			status_code=status.HTTP_409_CONFLICT,
 			detail="An account with that email already exists.",
 		)
-	return await user_repository.create(db, email=email, hashed_password=hash_password(password))
+	user = await user_repository.create(db, email=email, hashed_password=hash_password(password))
+	await _seed_default_categories(db, user.id)	# Morning, Day, Evening
+	return user
 
 
 async def login(db: AsyncSession, email: str, password: str) -> TokenResponse:
@@ -76,7 +79,7 @@ async def get_current_user(
 		credentials: HTTPAuthorizationCredentials = Depends(_bearer),
 		db: AsyncSession = Depends(get_db),
 ) -> User:
-	""" FastAPI dependency. Validates the access token and returns user
+	""" FastAPI dependency. Validates access token and returns user
 	
 	usage in any protected route:
 		async def my_route(current_user: User = Depends(get_current)user)): ...

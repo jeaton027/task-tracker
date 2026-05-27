@@ -1,12 +1,15 @@
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, String, func
 from sqlalchemy.dialects.postgresql import UUID
-
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+	from app.models.category import Category
 
 
 class User(Base):
@@ -42,4 +45,11 @@ class User(Base):
 		server_default=func.now(),
 		onupdate=func.now(),
 		nullable=False,
+	)
+
+	# ORM relationship — allows writing user.categories to get all user's categories
+	categories: Mapped[list["Category"]] = relationship(
+		"Category",
+		back_populates="user",
+		cascade="all, delete-orphan",	# deleting a user also deletes their categories
 	)

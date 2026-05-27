@@ -205,6 +205,16 @@ cp .env.example .env
 
 
 
+# Creating and defining each feature
+
+app/models/tag.py 						: defines the table / columns / relationships
+app/schemas/tag.py         				: defines what valid data looks like (input/output shapes)
+app/repositories/tag_repository.py 		: raw database queries (CRUD)
+app/services/tag_service.py 			: business logic (rules, validation)
+app/api/v1/tags.py 						: HTTP endpoints (routes)
+
+
+
 
 # docker commands
 Run a command inside the running API container
