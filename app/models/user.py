@@ -11,6 +11,7 @@ from app.db.base import Base
 if TYPE_CHECKING:
 	from app.models.category import Category
 	from app.models.tag import Tag
+	from app.models.habit import Habit
 
 
 class User(Base):
@@ -58,4 +59,9 @@ class User(Base):
 		"Tag",
 		back_populates="user",
 		cascade="all, delete-orphan",	# deleting a user also deletes their tags
+	)
+	habits: Mapped[list["Habit"]] = relationship(
+		"Habit",
+		back_populates="user",
+		cascade="all, delete-orphan",	# deleting a user also deletes their habits
 	)

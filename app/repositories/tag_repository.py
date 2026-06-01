@@ -20,6 +20,22 @@ async def get_all_by_user(db: AsyncSession, user_id: uuid.UUID) -> list[Tag]:
 	return list(result.scalars().all())
 
 
+async def get_by_ids_for_user(
+	db: AsyncSession, tag_ids: list[uuid.UUID], user_id: uuid.UUID
+) -> list[Tag]:
+	"""Fetch tags by ID, restricted to ones belonging to this user.
+	Used to validate tag_ids supplied when creating/editing a habit.
+	Missing or other-user IDs are silently dropped — caller compares lengths
+	to detect that case and decide whether to 404.
+	"""
+	if not tag_ids:
+		return []
+	result = await db.execute(
+		select(Tag).where(Tag.id.in_(tag_ids), Tag.user_id == user_id)
+	)
+	return list(result.scalars().all())
+
+
 async def create(db: AsyncSession, user_id: uuid.UUID, name: str) -> Tag:
 	tag = Tag(user_id=user_id, name=name)
 	db.add(tag)

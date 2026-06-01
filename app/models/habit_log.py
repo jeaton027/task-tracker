@@ -1,14 +1,13 @@
 import uuid
+from datetime import date
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import Date, DateTime, ForeignKey, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-
-from app.models.habit_tag import habit_tags
 
 if TYPE_CHECKING:
 	# only imported during type-checking (mypy), not at runtime
@@ -17,21 +16,22 @@ if TYPE_CHECKING:
 	from app.models.user import User
 
 
-class Tag(Base):
-	__tablename__ = "tags"
+class HabitLog(Base):
+	__tablename__ = "habit_logs"
 
 	id: Mapped[uuid.UUID] = mapped_column(
 		UUID(as_uuid=True),
 		primary_key=True,
 		default=uuid.uuid4,
 	)
-	name: Mapped[str] = mapped_column(
-		String(50),				# tags are short labels (e.g. "health", "work")
-		nullable=False,
-	)
-	user_id: Mapped[uuid.UUID] = mapped_column(
+	habit_id: Mapped[uuid.UUID] = mapped_column(
 		UUID(as_uuid=True),
-		ForeignKey("users.id", ondelete="CASCADE"),
+		ForeignKey("habits.id", ondelete="CASCADE"),
+		nullable=False,
+		index=True,
+	)
+	log_date: Mapped[date] = mapped_column(
+		Date,
 		nullable=False,
 		index=True,
 	)
@@ -48,16 +48,14 @@ class Tag(Base):
 	)
 
 	# ORM relationships
-	# tag.user   -> the full User object
-	# tag.habits -> list of Habit objects that wear this tag
-	user: Mapped["User"] = relationship("User", back_populates="tags")
-	habits: Mapped[list["Habit"]] = relationship(
+	# habit_log.habits -> Habit object for this log
+	# habit.logs -> lsits all log entries for that habit
+	habit: Mapped["Habit"] = relationship(
 		"Habit",
-		secondary=habit_tags,
-		back_populates="tags",
+		back_populates="logs",
 	)
 
-	# same user can't have two tags with the same name (case-sensitive)
+	# no duplicate logs for same habit same day.
 	__table_args__ = (
-		UniqueConstraint("user_id", "name", name="uq_tags_user_name"),
+		UniqueConstraint("habit_id", "log_date", name="uq_habit_logs_habit_date"),
 	)
