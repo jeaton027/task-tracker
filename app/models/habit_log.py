@@ -13,7 +13,6 @@ if TYPE_CHECKING:
 	# only imported during type-checking (mypy), not at runtime
 	# prevents circular imports
 	from app.models.habit import Habit
-	from app.models.user import User
 
 
 class HabitLog(Base):
