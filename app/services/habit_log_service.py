@@ -12,14 +12,15 @@ from app.schemas.habit_log import HabitStatus
 from app.services import habit_service
 
 
-def _today_utc() -> date:
+def today_utc() -> date:
 	"""server's default 'today' ; explicit UTC so it doesn't drift with whatever
 	timezone the container happens to be set to.
+	Public — also used by calendar_service.
 	"""
 	return datetime.now(timezone.utc).date()
 
 
-def _is_due_on(habit: Habit, target_date: date) -> bool:
+def is_due_on(habit: Habit, target_date: date) -> bool:
 	"""whether a habit should appear on /today for the given date.
 
 	Rules:
@@ -48,7 +49,7 @@ def _is_due_on(habit: Habit, target_date: date) -> bool:
 	return False
 
 
-def _compute_status(mode: HabitMode, logged: bool, target_date: date, today: date) -> HabitStatus:
+def compute_status(mode: HabitMode, logged: bool, target_date: date, today: date) -> HabitStatus:
 	"""DO/AVOID inversion"""
 	# DO
 	if mode == HabitMode.DO:
@@ -60,7 +61,7 @@ def _compute_status(mode: HabitMode, logged: bool, target_date: date, today: dat
 
 
 def _reject_future(log_date: date) -> None:
-	if log_date > _today_utc():
+	if log_date > today_utc():
 		raise HTTPException(
 			status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
 			detail="Cannot log a future date.",
@@ -71,13 +72,13 @@ async def list_today(
 	db: AsyncSession, user_id: uuid.UUID, target_date: date | None = None
 ) -> list[tuple[Habit, HabitStatus]]:
 	"""All habits due on target_date for this user, paired with their status."""
-	today = _today_utc()
+	today = today_utc()
 	target_date = target_date or today
 
 	# pull everything once — N habits is small (personal app). filtering in
 	# Python keeps the "due today" rules in one readable place.
 	all_habits = await habit_repository.get_all_by_user(db, user_id)
-	due = [h for h in all_habits if _is_due_on(h, target_date)]
+	due = [h for h in all_habits if is_due_on(h, target_date)]
 
 	# one bulk query for all logs on target_date instead of N
 	logs = await habit_log_repository.get_by_habit_ids_and_date(
@@ -86,7 +87,7 @@ async def list_today(
 	logged_ids = {log.habit_id for log in logs}
 
 	return [
-		(h, _compute_status(h.mode, h.id in logged_ids, target_date, today))
+		(h, compute_status(h.mode, h.id in logged_ids, target_date, today))
 		for h in due
 	]
 
@@ -98,7 +99,7 @@ async def mark_done(
 	log_date: date | None = None,
 ) -> HabitLog:
 	"""idempotent: if a log already exists for (habit, date), returns it."""
-	log_date = log_date or _today_utc()
+	log_date = log_date or today_utc()
 	_reject_future(log_date)
 
 	# 404 if habit doesn't exist or belongs to another user
@@ -134,7 +135,7 @@ async def unmark(
 	user_id: uuid.UUID,
 	log_date: date | None = None,
 ) -> None:
-	log_date = log_date or _today_utc()
+	log_date = log_date or today_utc()
 	_reject_future(log_date)
 
 	await habit_service.get_habit(db, habit_id, user_id)	# 404 guard

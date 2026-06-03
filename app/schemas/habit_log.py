@@ -12,13 +12,15 @@ class HabitStatus(str, enum.Enum):
 	Folds DO/AVOID inversion into one enum so clients don't need to know the rule.
 
 	  DO  + logged     -> SUCCESS
-	  DO  + not logged -> PENDING
+	  DO  + not logged -> PENDING (today) or FAILED (past)
 	  AVOID + logged   -> FAILED
 	  AVOID + not logged -> SUCCESS
+	  not due that day  -> NOT_SCHEDULED  (calendar views only)
 	"""
 	SUCCESS = "SUCCESS"
 	PENDING = "PENDING"
 	FAILED = "FAILED"
+	NOT_SCHEDULED = "NOT_SCHEDULED"
 
 
 class HabitLogCreate(BaseModel):

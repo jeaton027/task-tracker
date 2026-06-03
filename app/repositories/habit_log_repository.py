@@ -37,6 +37,27 @@ async def get_by_habit_ids_and_date(
 	return list(result.scalars().all())
 
 
+async def get_by_habit_ids_and_date_range(
+	db: AsyncSession,
+	habit_ids: list[uuid.UUID],
+	start_date: date,
+	end_date: date,
+) -> list[HabitLog]:
+	"""All log rows for the given habits between start_date and end_date,
+	inclusive. Used by calendar views to fetch a whole week or month at once.
+	"""
+	if not habit_ids:
+		return []
+	result = await db.execute(
+		select(HabitLog).where(
+			HabitLog.habit_id.in_(habit_ids),
+			HabitLog.log_date >= start_date,
+			HabitLog.log_date <= end_date,
+		)
+	)
+	return list(result.scalars().all())
+
+
 async def create(
 	db: AsyncSession, habit_id: uuid.UUID, log_date: date
 ) -> HabitLog:
