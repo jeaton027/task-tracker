@@ -70,6 +70,42 @@ async def test_create_habit(client: AsyncClient) -> None:
 	assert body["frequency"] == "DAILY"
 	assert body["is_active"] is True
 	assert body["end_date"] is None
+	# quantified-habit defaults: DO + omitted target_per_period -> 1
+	assert body["target_per_period"] == 1
+	assert body["increment"] == 1.0
+
+
+@pytest.mark.anyio
+async def test_create_avoid_habit_default_target_is_zero(client: AsyncClient) -> None:
+	"""AVOID + omitted target_per_period defaults to 0 (binary 'never logged')."""
+	token = await _register_and_login(client)
+	cat_id = await _first_category_id(client, token)
+	resp = await client.post(
+		"/api/v1/habits",
+		json=_habit_payload(cat_id, name="Quit smoking", mode="AVOID"),
+		headers=_auth(token),
+	)
+	assert resp.status_code == 201
+	assert resp.json()["target_per_period"] == 0
+
+
+@pytest.mark.anyio
+async def test_create_quantified_habit(client: AsyncClient) -> None:
+	"""Explicit target_per_period and increment round-trip correctly."""
+	token = await _register_and_login(client)
+	cat_id = await _first_category_id(client, token)
+	resp = await client.post(
+		"/api/v1/habits",
+		json=_habit_payload(
+			cat_id, name="Run 6k/week", frequency="WEEKLY",
+			target_per_period=6, increment=2.0,
+		),
+		headers=_auth(token),
+	)
+	assert resp.status_code == 201
+	body = resp.json()
+	assert body["target_per_period"] == 6
+	assert body["increment"] == 2.0
 
 
 @pytest.mark.anyio

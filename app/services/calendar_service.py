@@ -1,10 +1,12 @@
 import uuid
 from calendar import monthrange
+from collections import defaultdict
 from datetime import date, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.habit import Habit
+from app.models.habit_log import HabitLog
 from app.repositories import habit_log_repository, habit_repository
 from app.schemas.calendar import (
 	CalendarDay,
@@ -15,7 +17,12 @@ from app.schemas.calendar import (
 from app.schemas.habit import HabitResponse
 from app.schemas.habit_log import HabitStatus
 from app.services import habit_service
-from app.services.habit_log_service import compute_status, is_due_on, today_utc
+from app.services.habit_log_service import (
+	compute_status,
+	is_due_on,
+	period_bounds,
+	today_utc,
+)
 
 
 def _week_start(target_date: date) -> date:
@@ -26,11 +33,48 @@ def _week_start(target_date: date) -> date:
 	return target_date - timedelta(days=target_date.weekday())
 
 
-def _day_status(habit: Habit, day: date, logged: bool, today: date) -> HabitStatus:
-	"""Status for one (habit, day) cell. NOT_SCHEDULED if the habit isn't due."""
+def _daily_by_habit(
+	logs: list[HabitLog],
+) -> dict[tuple[uuid.UUID, date], float]:
+	"""Group logs into a (habit_id, log_date) -> SUM(amount) lookup."""
+	totals: dict[tuple[uuid.UUID, date], float] = defaultdict(float)
+	for log in logs:
+		totals[(log.habit_id, log.log_date)] += log.amount
+	return totals
+
+
+def _period_total(
+	daily: dict[tuple[uuid.UUID, date], float],
+	habit_id: uuid.UUID,
+	period_start: date,
+	period_end: date,
+) -> float:
+	"""Sum amounts for one habit across an inclusive date range."""
+	return sum(
+		amt for (hid, d), amt in daily.items()
+		if hid == habit_id and period_start <= d <= period_end
+	)
+
+
+def _day_cell(
+	habit: Habit,
+	day: date,
+	daily: dict[tuple[uuid.UUID, date], float],
+	today: date,
+) -> CalendarDay:
+	"""Build one calendar cell: per-day amount + per-period status.
+
+	NOT_SCHEDULED if the habit isn't due on this day. Otherwise compute status
+	from the period total (which spans more than just `day` for period habits).
+	Amount is always the day's actual logged amount, independent of status.
+	"""
+	day_amount = daily.get((habit.id, day), 0.0)
 	if not is_due_on(habit, day):
-		return HabitStatus.NOT_SCHEDULED
-	return compute_status(habit.mode, logged, day, today)
+		return CalendarDay(date=day, status=HabitStatus.NOT_SCHEDULED, amount=day_amount)
+	ps, pe = period_bounds(habit, day)
+	total = _period_total(daily, habit.id, ps, pe)
+	status_ = compute_status(habit.mode, total, habit.target_per_period, pe, today)
+	return CalendarDay(date=day, status=status_, amount=day_amount)
 
 
 # ---------------------------------------------------------------------------
@@ -52,22 +96,28 @@ async def weekly_view(
 	if not habits:
 		return []
 
-	# one query for every log across the whole week, then group in Python
+	# Fetch a wide enough log range to cover every habit's containing period for
+	# any day in the visible week (a MONTHLY habit's period extends beyond the
+	# week itself). Cheapest correct query: union of period bounds across the
+	# 7 displayed days.
+	all_starts: list[date] = []
+	all_ends: list[date] = []
+	for habit in habits:
+		for day in week_days:
+			ps, pe = period_bounds(habit, day)
+			all_starts.append(ps)
+			all_ends.append(pe)
+	fetch_start = min(all_starts)
+	fetch_end = max(all_ends)
+
 	logs = await habit_log_repository.get_by_habit_ids_and_date_range(
-		db, [h.id for h in habits], monday, sunday
+		db, [h.id for h in habits], fetch_start, fetch_end
 	)
-	# set of (habit_id, date) tuples — O(1) membership check below
-	logged_keys: set[tuple[uuid.UUID, date]] = {(log.habit_id, log.log_date) for log in logs}
+	daily = _daily_by_habit(logs)
 
 	items: list[WeeklyCalendarItem] = []
 	for habit in habits:
-		day_cells = [
-			CalendarDay(
-				date=day,
-				status=_day_status(habit, day, (habit.id, day) in logged_keys, today),
-			)
-			for day in week_days
-		]
+		day_cells = [_day_cell(habit, day, daily, today) for day in week_days]
 		items.append(
 			WeeklyCalendarItem(
 				habit=HabitResponse.model_validate(habit),
@@ -115,10 +165,21 @@ async def monthly_view(
 	start = month_days[0]
 	end = month_days[-1]
 
+	# Same period-aware fetch as weekly_view — for a YEARLY habit, the period
+	# extends from Jan 1 to Dec 31 of every day in the month being viewed.
+	all_starts: list[date] = []
+	all_ends: list[date] = []
+	for day in month_days:
+		ps, pe = period_bounds(habit, day)
+		all_starts.append(ps)
+		all_ends.append(pe)
+	fetch_start = min(all_starts)
+	fetch_end = max(all_ends)
+
 	logs = await habit_log_repository.get_by_habit_ids_and_date_range(
-		db, [habit_id], start, end
+		db, [habit_id], fetch_start, fetch_end
 	)
-	logged_dates: set[date] = {log.log_date for log in logs}
+	daily = _daily_by_habit(logs)
 
 	day_cells: list[CalendarDay] = []
 	scheduled = 0
@@ -126,16 +187,16 @@ async def monthly_view(
 	failed = 0
 	pending = 0
 	for day in month_days:
-		st = _day_status(habit, day, day in logged_dates, today)
-		day_cells.append(CalendarDay(date=day, status=st))
-		if st == HabitStatus.NOT_SCHEDULED:
+		cell = _day_cell(habit, day, daily, today)
+		day_cells.append(cell)
+		if cell.status == HabitStatus.NOT_SCHEDULED:
 			continue
 		scheduled += 1
-		if st == HabitStatus.SUCCESS:
+		if cell.status == HabitStatus.SUCCESS:
 			successful += 1
-		elif st == HabitStatus.FAILED:
+		elif cell.status == HabitStatus.FAILED:
 			failed += 1
-		elif st == HabitStatus.PENDING:
+		elif cell.status == HabitStatus.PENDING:
 			pending += 1
 
 	success_rate = (successful / scheduled) if scheduled else 0.0

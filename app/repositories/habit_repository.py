@@ -42,9 +42,15 @@ async def create(
 	frequency: HabitFrequency,
 	start_date: date,
 	category_id: uuid.UUID,
+	target_per_period: int,
+	increment: float,
 	description: str | None = None,
 	end_date: date | None = None,
 	is_active: bool = True,
+	scheduled_weekdays: list[int] | None = None,
+	scheduled_days_of_month: list[int] | None = None,
+	scheduled_dates: list[str] | None = None,
+	interval_days: int | None = None,
 	tags: list[Tag] | None = None,
 ) -> Habit:
 	habit = Habit(
@@ -57,6 +63,12 @@ async def create(
 		end_date=end_date,
 		category_id=category_id,
 		is_active=is_active,
+		target_per_period=target_per_period,
+		increment=increment,
+		scheduled_weekdays=scheduled_weekdays or [],
+		scheduled_days_of_month=scheduled_days_of_month or [],
+		scheduled_dates=scheduled_dates or [],
+		interval_days=interval_days,
 		tags=tags or [],			# assigned in-memory; commit writes join rows
 	)
 	db.add(habit)

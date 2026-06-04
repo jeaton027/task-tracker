@@ -4,7 +4,10 @@ from app.services import (
 	category_service,
 	habit_log_service,
 	habit_service,
+	routine_service,
+	routine_session_service,
 	tag_service,
+	today_service,
 )
 
 __all__ = [
@@ -13,5 +16,8 @@ __all__ = [
 	"category_service",
 	"habit_log_service",
 	"habit_service",
+	"routine_service",
+	"routine_session_service",
 	"tag_service",
+	"today_service",
 ]

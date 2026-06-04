@@ -66,6 +66,12 @@ async def create_habit(
 	description: str | None = None,
 	end_date: date | None = None,
 	is_active: bool = True,
+	target_per_period: int | None = None,
+	increment: float = 1.0,
+	scheduled_weekdays: list[int] | None = None,
+	scheduled_days_of_month: list[int] | None = None,
+	scheduled_dates: list[str] | None = None,
+	interval_days: int | None = None,
 	tag_ids: list[uuid.UUID] | None = None,
 ) -> Habit:
 	# verify the category belongs to this user — 404s if not.
@@ -73,6 +79,10 @@ async def create_habit(
 
 	# resolve + validate tags before touching the DB
 	tags = await _resolve_user_tags(db, tag_ids or [], user_id)
+
+	# mode-aware default for target_per_period: DO->1, AVOID->0
+	if target_per_period is None:
+		target_per_period = 0 if mode == HabitMode.AVOID else 1
 
 	try:
 		return await habit_repository.create(
@@ -86,6 +96,12 @@ async def create_habit(
 			description=description,
 			end_date=end_date,
 			is_active=is_active,
+			target_per_period=target_per_period,
+			increment=increment,
+			scheduled_weekdays=scheduled_weekdays,
+			scheduled_days_of_month=scheduled_days_of_month,
+			scheduled_dates=scheduled_dates,
+			interval_days=interval_days,
 			tags=tags,
 		)
 	except IntegrityError:

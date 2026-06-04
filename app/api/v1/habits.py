@@ -12,7 +12,9 @@ from app.schemas.habit_log import (
 	HabitLogResponse,
 	HabitTodayResponse,
 )
-from app.services import auth_service, habit_log_service, habit_service
+from app.schemas.today import RoutineTodayResponse, TodayResponse, TodaySection
+from app.schemas.routine import RoutineResponse
+from app.services import auth_service, habit_log_service, habit_service, today_service
 
 router = APIRouter(prefix="/habits", tags=["habits"])
 
@@ -27,7 +29,7 @@ async def list_habits(
 
 # IMPORTANT: declared BEFORE GET /{habit_id} — otherwise FastAPI would try to
 # parse "today" as a UUID and fail.
-@router.get("/today", response_model=list[HabitTodayResponse])
+@router.get("/today", response_model=TodayResponse)
 async def list_today(
 	db: AsyncSession = Depends(get_db),
 	current_user: User = Depends(auth_service.get_current_user),
@@ -36,15 +38,37 @@ async def list_today(
 		alias="date",
 		description="Calendar day to check (YYYY-MM-DD). Defaults to UTC today.",
 	),
-) -> list[HabitTodayResponse]:
-	pairs = await habit_log_service.list_today(db, current_user.id, target_date)
-	return [
-		HabitTodayResponse(
+) -> TodayResponse:
+	"""Sectioned by frequency, each section contains both habits and routines.
+
+	Note: path stays /habits/today for backwards-compatibility, but the response
+	now includes routines too.
+	"""
+	sections = await today_service.today_view(
+		db, current_user.id, target_date,
+	)
+
+	def _habit_today(habit, status_) -> HabitTodayResponse:
+		return HabitTodayResponse(
 			**HabitResponse.model_validate(habit).model_dump(),
-			status=habit_status,
+			status=status_,
 		)
-		for habit, habit_status in pairs
-	]
+
+	def _routine_today(routine, status_) -> RoutineTodayResponse:
+		return RoutineTodayResponse(
+			**RoutineResponse.model_validate(routine).model_dump(),
+			status=status_,
+		)
+
+	return TodayResponse(
+		**{
+			key: TodaySection(
+				habits=[_habit_today(h, s) for h, s in sec["habits"]],
+				routines=[_routine_today(r, s) for r, s in sec["routines"]],
+			)
+			for key, sec in sections.items()
+		}
+	)
 
 
 @router.post("", response_model=HabitResponse, status_code=status.HTTP_201_CREATED)
@@ -64,6 +88,12 @@ async def create_habit(
 		end_date=payload.end_date,
 		category_id=payload.category_id,
 		is_active=payload.is_active,
+		target_per_period=payload.target_per_period,
+		increment=payload.increment,
+		scheduled_weekdays=payload.scheduled_weekdays,
+		scheduled_days_of_month=payload.scheduled_days_of_month,
+		scheduled_dates=payload.scheduled_dates,
+		interval_days=payload.interval_days,
 		tag_ids=payload.tag_ids,
 	)
 
@@ -108,7 +138,7 @@ async def delete_habit(
 @router.post(
 	"/{habit_id}/log",
 	response_model=HabitLogResponse,
-	status_code=status.HTTP_200_OK,	# idempotent: 200 even if the log already existed
+	status_code=status.HTTP_201_CREATED,	# each call creates a new log row
 )
 async def mark_habit_done(
 	habit_id: uuid.UUID,
@@ -117,8 +147,13 @@ async def mark_habit_done(
 	current_user: User = Depends(auth_service.get_current_user),
 ) -> object:
 	log_date = payload.log_date if payload else None
+	amount = payload.amount if payload else None
 	return await habit_log_service.mark_done(
-		db, habit_id=habit_id, user_id=current_user.id, log_date=log_date
+		db,
+		habit_id=habit_id,
+		user_id=current_user.id,
+		log_date=log_date,
+		amount=amount,
 	)
 
 

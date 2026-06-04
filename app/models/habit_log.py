@@ -1,9 +1,8 @@
 import uuid
-from datetime import date
-from datetime import datetime
+from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, DateTime, ForeignKey, UniqueConstraint, func
+from sqlalchemy import Date, DateTime, Float, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,6 +15,9 @@ if TYPE_CHECKING:
 
 
 class HabitLog(Base):
+	"""One event of the user logging a habit. Quantified habits can have many
+	rows per (habit, day) — each row's `amount` adds to the day's total.
+	"""
 	__tablename__ = "habit_logs"
 
 	id: Mapped[uuid.UUID] = mapped_column(
@@ -34,6 +36,14 @@ class HabitLog(Base):
 		nullable=False,
 		index=True,
 	)
+	amount: Mapped[float] = mapped_column(
+		Float,
+		nullable=False,
+		default=1.0,
+		server_default="1.0",
+		# how much this single event counts. Defaults to habit.increment when
+		# created via the API. SUM(amount) across a period determines status.
+	)
 	created_at: Mapped[datetime] = mapped_column(
 		DateTime(timezone=True),
 		server_default=func.now(),
@@ -46,15 +56,13 @@ class HabitLog(Base):
 		nullable=False,
 	)
 
-	# ORM relationships
-	# habit_log.habits -> Habit object for this log
-	# habit.logs -> lsits all log entries for that habit
+	# habit_log.habit -> the Habit this event belongs to
+	# habit.logs      -> all events for that habit
 	habit: Mapped["Habit"] = relationship(
 		"Habit",
 		back_populates="logs",
 	)
 
-	# no duplicate logs for same habit same day.
-	__table_args__ = (
-		UniqueConstraint("habit_id", "log_date", name="uq_habit_logs_habit_date"),
-	)
+	# NOTE: unique constraint on (habit_id, log_date) intentionally removed —
+	# quantified habits need multiple logs per day. Idempotency is no longer
+	# enforced at the DB level.

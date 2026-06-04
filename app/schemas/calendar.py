@@ -7,9 +7,17 @@ from app.schemas.habit_log import HabitStatus
 
 
 class CalendarDay(BaseModel):
-	"""One day's slot in a calendar view: the date and the habit's status on it."""
+	"""One day's slot in a calendar view.
+
+	- `status` is the day-level status (for daily habits) or the day's view of
+	  the containing period (for WEEKLY/MONTHLY/YEARLY habits).
+	- `amount` is the total amount LOGGED on this specific day. Lets the UI
+	  render gradients (e.g. days with logs = solid color, surrounding days
+	  in a successful week = lighter gradient).
+	"""
 	date: date
 	status: HabitStatus
+	amount: float = 0.0
 
 
 class WeeklyCalendarItem(BaseModel):

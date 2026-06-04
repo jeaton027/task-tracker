@@ -58,6 +58,37 @@ async def test_weekly_empty_when_no_habits(client: AsyncClient) -> None:
 
 
 @pytest.mark.anyio
+async def test_weekly_includes_amount_per_day(client: AsyncClient) -> None:
+	"""Each day cell carries the actual logged amount for that day."""
+	token = await _register_and_login(client)
+	cat = await _first_category_id(client, token)
+	habit_id = await _make_habit(client, token, cat, mode="DO")
+
+	# log Wed 2026-01-07 twice — total 2.0
+	for _ in range(2):
+		await client.post(
+			f"/api/v1/habits/{habit_id}/log",
+			json={"log_date": "2026-01-07"},
+			headers=_auth(token),
+		)
+	# log Fri 2026-01-09 once — total 1.0
+	await client.post(
+		f"/api/v1/habits/{habit_id}/log",
+		json={"log_date": "2026-01-09"},
+		headers=_auth(token),
+	)
+
+	resp = await client.get(
+		"/api/v1/calendar/weekly?date=2026-01-07", headers=_auth(token),
+	)
+	days = {d["date"]: d["amount"] for d in resp.json()[0]["days"]}
+	assert days["2026-01-07"] == 2.0
+	assert days["2026-01-09"] == 1.0
+	# unlogged day -> 0.0
+	assert days["2026-01-08"] == 0.0
+
+
+@pytest.mark.anyio
 async def test_weekly_returns_7_days_per_habit(client: AsyncClient) -> None:
 	token = await _register_and_login(client)
 	cat = await _first_category_id(client, token)
@@ -115,23 +146,50 @@ async def test_weekly_daily_habit_status_per_day(client: AsyncClient) -> None:
 
 
 @pytest.mark.anyio
-async def test_weekly_weekly_habit_only_monday_scheduled(client: AsyncClient) -> None:
-	"""WEEKLY habit -> NOT_SCHEDULED Tue-Sun, real status on Monday."""
+async def test_weekly_weekly_habit_anchored_marks_non_anchor_not_scheduled(
+	client: AsyncClient,
+) -> None:
+	"""WEEKLY habit with scheduled_weekdays=[0] -> NOT_SCHEDULED Tue-Sun.
+
+	Uses a fully-past week (Jan 2026) so the period_end is < today, giving us
+	a deterministic FAILED on the anchor Monday regardless of when this runs.
+	"""
 	token = await _register_and_login(client)
 	cat = await _first_category_id(client, token)
-	await _make_habit(client, token, cat, frequency="WEEKLY")
+	body = {
+		"name": "Weekly Mon", "mode": "DO", "frequency": "WEEKLY",
+		"start_date": "2026-01-01", "category_id": cat,
+		"scheduled_weekdays": [0],
+	}
+	await client.post("/api/v1/habits", json=body, headers=_auth(token))
+
+	# Week of 2026-01-05 (Mon) -> Sun 2026-01-11. Fully in the past.
+	resp = await client.get(
+		"/api/v1/calendar/weekly?date=2026-01-07", headers=_auth(token)
+	)
+	days = {d["date"]: d["status"] for d in resp.json()[0]["days"]}
+	for tue_to_sun in [
+		"2026-01-06", "2026-01-07", "2026-01-08",
+		"2026-01-09", "2026-01-10", "2026-01-11",
+	]:
+		assert days[tue_to_sun] == "NOT_SCHEDULED"
+	# Monday — anchor day, never logged, period fully past -> FAILED
+	assert days["2026-01-05"] == "FAILED"
+
+
+@pytest.mark.anyio
+async def test_weekly_flexible_habit_all_days_scheduled(client: AsyncClient) -> None:
+	"""WEEKLY without scheduled_weekdays = flexible: all 7 days due."""
+	token = await _register_and_login(client)
+	cat = await _first_category_id(client, token)
+	await _make_habit(client, token, cat, frequency="WEEKLY")		# no schedule
 
 	resp = await client.get(
 		"/api/v1/calendar/weekly?date=2026-06-03", headers=_auth(token)
 	)
-	days = {d["date"]: d["status"] for d in resp.json()[0]["days"]}
-	for tue_to_sun in [
-		"2026-06-02", "2026-06-03", "2026-06-04",
-		"2026-06-05", "2026-06-06", "2026-06-07",
-	]:
-		assert days[tue_to_sun] == "NOT_SCHEDULED"
-	# Monday gets a real status (FAILED — never logged, in the past)
-	assert days["2026-06-01"] == "FAILED"
+	statuses = {d["status"] for d in resp.json()[0]["days"]}
+	# all real statuses (no NOT_SCHEDULED) — past unlogged week -> all FAILED
+	assert "NOT_SCHEDULED" not in statuses
 
 
 @pytest.mark.anyio
@@ -249,12 +307,19 @@ async def test_monthly_summary_counts(client: AsyncClient) -> None:
 
 
 @pytest.mark.anyio
-async def test_monthly_weekly_habit_marks_non_mondays_not_scheduled(
+async def test_monthly_weekly_anchored_only_counts_anchor_days(
 	client: AsyncClient,
 ) -> None:
+	"""WEEKLY anchored to Monday — Mondays count as scheduled, others don't."""
 	token = await _register_and_login(client)
 	cat = await _first_category_id(client, token)
-	habit_id = await _make_habit(client, token, cat, frequency="WEEKLY")
+	body = {
+		"name": "Weekly Mon", "mode": "DO", "frequency": "WEEKLY",
+		"start_date": "2026-01-01", "category_id": cat,
+		"scheduled_weekdays": [0],
+	}
+	create = await client.post("/api/v1/habits", json=body, headers=_auth(token))
+	habit_id = create.json()["id"]
 
 	resp = await client.get(
 		f"/api/v1/calendar/monthly?habit_id={habit_id}&month=2026-06",

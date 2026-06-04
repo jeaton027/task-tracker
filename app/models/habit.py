@@ -8,12 +8,14 @@ from sqlalchemy import (
 	Date,
 	DateTime,
 	Enum as SQLEnum,
+	Float,
 	ForeignKey,
+	Integer,
 	String,
 	UniqueConstraint,
 	func,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -46,11 +48,16 @@ class HabitMode(str, enum.Enum):
 
 class HabitFrequency(str, enum.Enum):
 	"""How often a habit is expected.
-	CUSTOM leaves room for future per-habit interval rules (e.g. every 3 days).
+
+	Period-based: DAILY, WEEKLY, MONTHLY, YEARLY (target tracked across the period).
+	Interval-based: INTERVAL (every N days from start_date, paired with interval_days).
+	CUSTOM is reserved for future date-list scheduling.
 	"""
 	DAILY = "DAILY"
 	WEEKLY = "WEEKLY"
 	MONTHLY = "MONTHLY"
+	YEARLY = "YEARLY"
+	INTERVAL = "INTERVAL"
 	CUSTOM = "CUSTOM"
 
 
@@ -99,6 +106,56 @@ class Habit(Base):
 		Boolean,
 		default=True,				# new habits start active; user can pause without deleting
 		nullable=False,
+	)
+	target_per_period: Mapped[int] = mapped_column(
+		Integer,
+		nullable=False,
+		default=1,
+		server_default="1",		# existing rows backfill to 1 (binary habit)
+		# DO  habit success: SUM(log.amount) >= target_per_period (per period)
+		# AVOID success:     SUM(log.amount) <= target_per_period (per period)
+		# target=0 + AVOID = classic "no log allowed" (e.g. quit smoking)
+	)
+	increment: Mapped[float] = mapped_column(
+		Float,
+		nullable=False,
+		default=1.0,
+		server_default="1.0",
+		# default `amount` for a new log when the user doesn't specify one.
+		# e.g. "Run 6km/wk, increment 2" -> each tap adds 2km
+	)
+	# ------------------------------------------------------------------------
+	# Scheduling (only one type is meaningful per frequency; others stay empty)
+	# Empty array = "flexible" (any day in the period). Non-empty = anchored.
+	# Validation lives at the schema layer (HabitCreate / HabitUpdate).
+	# ------------------------------------------------------------------------
+	scheduled_weekdays: Mapped[list[int]] = mapped_column(
+		ARRAY(Integer),
+		nullable=False,
+		default=list,
+		server_default="{}",			# Postgres array literal for empty
+		# WEEKLY only. Values 0-6 (Mon=0). [] = any day in week.
+	)
+	scheduled_days_of_month: Mapped[list[int]] = mapped_column(
+		ARRAY(Integer),
+		nullable=False,
+		default=list,
+		server_default="{}",
+		# MONTHLY only. Values 1-31. [] = any day in month.
+	)
+	scheduled_dates: Mapped[list[str]] = mapped_column(
+		ARRAY(String(5)),				# "MM-DD" is 5 chars
+		nullable=False,
+		default=list,
+		server_default="{}",
+		# YEARLY only. Values "MM-DD". [] = any day in year.
+	)
+	interval_days: Mapped[int | None] = mapped_column(
+		Integer,
+		nullable=True,
+		default=None,
+		# INTERVAL only. Required when frequency=INTERVAL. e.g. 3 = every 3 days.
+		# Cadence anchored to habit.start_date.
 	)
 	user_id: Mapped[uuid.UUID] = mapped_column(
 		UUID(as_uuid=True),

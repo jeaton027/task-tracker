@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 	from app.models.category import Category
 	from app.models.tag import Tag
 	from app.models.habit import Habit
+	from app.models.routine import Routine
 
 
 class User(Base):
@@ -64,4 +65,9 @@ class User(Base):
 		"Habit",
 		back_populates="user",
 		cascade="all, delete-orphan",	# deleting a user also deletes their habits
+	)
+	routines: Mapped[list["Routine"]] = relationship(
+		"Routine",
+		back_populates="user",
+		cascade="all, delete-orphan",
 	)

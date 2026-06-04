@@ -1,21 +1,26 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.habit_log import HabitLog
 
 
-async def get_by_habit_and_date(
+async def get_latest_by_habit_and_date(
 	db: AsyncSession, habit_id: uuid.UUID, log_date: date
 ) -> HabitLog | None:
-	"""look up single log row for a given habit, day, if any."""
+	"""Return the most recently created log for (habit, day), or None.
+	Used by DELETE /log to delete the latest event.
+	"""
 	result = await db.execute(
-		select(HabitLog).where(
+		select(HabitLog)
+		.where(
 			HabitLog.habit_id == habit_id,
 			HabitLog.log_date == log_date,
 		)
+		.order_by(desc(HabitLog.created_at))
+		.limit(1)
 	)
 	return result.scalar_one_or_none()
 
@@ -23,8 +28,8 @@ async def get_by_habit_and_date(
 async def get_by_habit_ids_and_date(
 	db: AsyncSession, habit_ids: list[uuid.UUID], log_date: date
 ) -> list[HabitLog]:
-	"""bulk lookup — used by GET /habits/today to fetch status for many habits
-	in one query instead of N.
+	"""Bulk lookup for a single day. Used by GET /habits/today — caller sums
+	amounts per habit in Python.
 	"""
 	if not habit_ids:
 		return []
@@ -59,9 +64,12 @@ async def get_by_habit_ids_and_date_range(
 
 
 async def create(
-	db: AsyncSession, habit_id: uuid.UUID, log_date: date
+	db: AsyncSession,
+	habit_id: uuid.UUID,
+	log_date: date,
+	amount: float,
 ) -> HabitLog:
-	log = HabitLog(habit_id=habit_id, log_date=log_date)
+	log = HabitLog(habit_id=habit_id, log_date=log_date, amount=amount)
 	db.add(log)
 	await db.commit()
 	await db.refresh(log)
