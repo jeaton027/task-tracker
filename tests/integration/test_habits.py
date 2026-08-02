@@ -109,6 +109,143 @@ async def test_create_quantified_habit(client: AsyncClient) -> None:
 
 
 @pytest.mark.anyio
+async def test_create_habit_with_color_key_and_unit(client: AsyncClient) -> None:
+	"""color_key and unit round-trip via Create + Response."""
+	token = await _register_and_login(client)
+	cat_id = await _first_category_id(client, token)
+	resp = await client.post(
+		"/api/v1/habits",
+		json=_habit_payload(cat_id, color_key="olive", unit="glasses"),
+		headers=_auth(token),
+	)
+	assert resp.status_code == 201
+	body = resp.json()
+	assert body["color_key"] == "olive"
+	assert body["unit"] == "glasses"
+
+
+@pytest.mark.anyio
+async def test_create_habit_color_and_unit_default_to_null(
+	client: AsyncClient,
+) -> None:
+	"""Omitting color_key and unit -> nulls (UI falls back to deterministic color)."""
+	token = await _register_and_login(client)
+	cat_id = await _first_category_id(client, token)
+	resp = await client.post(
+		"/api/v1/habits", json=_habit_payload(cat_id), headers=_auth(token),
+	)
+	assert resp.status_code == 201
+	body = resp.json()
+	assert body["color_key"] is None
+	assert body["unit"] is None
+
+
+# ---------------------------------------------------------------------------
+# routine_ids on create
+# ---------------------------------------------------------------------------
+
+async def _make_routine(client: AsyncClient, token: str, name: str = "Morning") -> str:
+	body = {"name": name, "frequency": "DAILY", "start_date": "2026-01-01"}
+	resp = await client.post("/api/v1/routines", json=body, headers=_auth(token))
+	return resp.json()["id"]
+
+
+@pytest.mark.anyio
+async def test_create_habit_appended_to_routine(client: AsyncClient) -> None:
+	"""Habit created with routine_ids becomes a slot in the routine."""
+	token = await _register_and_login(client)
+	cat_id = await _first_category_id(client, token)
+	rid = await _make_routine(client, token)
+
+	create = await client.post(
+		"/api/v1/habits",
+		json=_habit_payload(cat_id, routine_ids=[rid]),
+		headers=_auth(token),
+	)
+	assert create.status_code == 201
+	habit_id = create.json()["id"]
+
+	# Verify the routine now contains the habit at position 0
+	resp = await client.get(f"/api/v1/routines/{rid}", headers=_auth(token))
+	slots = resp.json()["habits"]
+	assert len(slots) == 1
+	assert slots[0]["habit"]["id"] == habit_id
+	assert slots[0]["position"] == 0
+	assert slots[0]["timer_seconds"] is None
+	assert slots[0]["timer_type"] is None
+
+
+@pytest.mark.anyio
+async def test_create_habit_appends_at_next_position(client: AsyncClient) -> None:
+	"""When a routine already has slots, the new habit lands at the end."""
+	token = await _register_and_login(client)
+	cat_id = await _first_category_id(client, token)
+	# First habit added to routine via PATCH
+	first = await client.post(
+		"/api/v1/habits", json=_habit_payload(cat_id, name="Stretch"), headers=_auth(token),
+	)
+	first_id = first.json()["id"]
+	rid = await _make_routine(client, token)
+	await client.patch(
+		f"/api/v1/routines/{rid}",
+		json={"habits": [{"habit_id": first_id}]},
+		headers=_auth(token),
+	)
+
+	# Now create a new habit and append to the same routine
+	second = await client.post(
+		"/api/v1/habits",
+		json=_habit_payload(cat_id, name="Brush teeth", routine_ids=[rid]),
+		headers=_auth(token),
+	)
+	assert second.status_code == 201
+	second_id = second.json()["id"]
+
+	# Routine slots should be [Stretch@0, Brush teeth@1]
+	resp = await client.get(f"/api/v1/routines/{rid}", headers=_auth(token))
+	slots = resp.json()["habits"]
+	assert [s["habit"]["id"] for s in slots] == [first_id, second_id]
+	assert [s["position"] for s in slots] == [0, 1]
+
+
+@pytest.mark.anyio
+async def test_create_habit_in_multiple_routines(client: AsyncClient) -> None:
+	token = await _register_and_login(client)
+	cat_id = await _first_category_id(client, token)
+	r1 = await _make_routine(client, token, "Morning")
+	r2 = await _make_routine(client, token, "Night")
+
+	create = await client.post(
+		"/api/v1/habits",
+		json=_habit_payload(cat_id, routine_ids=[r1, r2]),
+		headers=_auth(token),
+	)
+	assert create.status_code == 201
+	habit_id = create.json()["id"]
+
+	for rid in (r1, r2):
+		resp = await client.get(f"/api/v1/routines/{rid}", headers=_auth(token))
+		assert any(s["habit"]["id"] == habit_id for s in resp.json()["habits"])
+
+
+@pytest.mark.anyio
+async def test_create_habit_with_other_users_routine_returns_404(
+	client: AsyncClient,
+) -> None:
+	token_a = await _register_and_login(client, "user_a@example.com")
+	token_b = await _register_and_login(client, "user_b@example.com")
+	cat_b = await _first_category_id(client, token_b)
+	rid_a = await _make_routine(client, token_a)
+
+	resp = await client.post(
+		"/api/v1/habits",
+		json=_habit_payload(cat_b, routine_ids=[rid_a]),
+		headers=_auth(token_b),
+	)
+	assert resp.status_code == 404
+
+
+@pytest.mark.anyio
 async def test_create_avoid_habit_with_all_fields(client: AsyncClient) -> None:
 	token = await _register_and_login(client)
 	cat_id = await _first_category_id(client, token)

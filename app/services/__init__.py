@@ -6,8 +6,10 @@ from app.services import (
 	habit_service,
 	routine_service,
 	routine_session_service,
+	stats_service,
 	tag_service,
 	today_service,
+	vacation_service,
 )
 
 __all__ = [
@@ -18,6 +20,8 @@ __all__ = [
 	"habit_service",
 	"routine_service",
 	"routine_session_service",
+	"stats_service",
 	"tag_service",
 	"today_service",
+	"vacation_service",
 ]

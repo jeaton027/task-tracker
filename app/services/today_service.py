@@ -1,14 +1,14 @@
 """Assembles the sectioned /today response from habits + routines."""
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.habit import Habit, HabitFrequency
+from app.models.habit import Habit, HabitFrequency, HabitSection
 from app.models.routine import Routine, RoutineFrequency
 from app.repositories import routine_repository, routine_session_repository
 from app.schemas.habit_log import HabitStatus
-from app.services import habit_log_service
+from app.services import habit_log_service, vacation_service
 
 
 # Map routine frequency -> /today section key. YEARLY routines don't exist.
@@ -26,6 +26,19 @@ _HABIT_SECTION = {
 	HabitFrequency.YEARLY: "yearly",
 	HabitFrequency.INTERVAL: "interval",
 }
+
+_SECTION_START_HOUR = {
+	HabitSection.MORNING: 0,
+	HabitSection.AFTERNOON: 12,
+	HabitSection.EVENING: 17,
+}
+
+
+def _section_visible(habit: Habit, current_hour: int) -> bool:
+	if habit.section is None:
+		return True
+	start_hour = _SECTION_START_HOUR.get(habit.section, 0)
+	return current_hour >= start_hour
 
 
 def _routine_is_due_on(routine: Routine, target_date: date) -> bool:
@@ -96,8 +109,13 @@ async def today_view(
 	db: AsyncSession,
 	user_id: uuid.UUID,
 	target_date: date | None = None,
+	client_hour: int | None = None,
+	scope: str = "today",
 ) -> dict[str, dict[str, list]]:
 	"""Sectioned: daily/weekly/monthly/yearly/interval, each with habits+routines.
+
+	scope="today" shows habits due on the date; "week"/"month"/"year" show all
+	habits belonging to that tab regardless of the date's schedule.
 
 	Returns a plain dict that the API layer converts to TodayResponse — keeps
 	this service Pydantic-free.
@@ -105,8 +123,16 @@ async def today_view(
 	today = habit_log_service.today_utc()
 	target = target_date or today
 
-	habit_pairs = await habit_log_service.list_today(db, user_id, target)
+	# If `target` is in any vacation, every item on /today gets VACATION display.
+	vacation_dates = await vacation_service.get_user_vacation_dates(db, user_id)
+	is_vacation_day = target in vacation_dates
+
+	habit_entries = await habit_log_service.list_today(db, user_id, target, scope=scope)
 	routine_pairs = await _routines_due_today(db, user_id, target, today)
+
+	if is_vacation_day:
+		habit_entries = [(*entry[:1], HabitStatus.VACATION, *entry[2:]) for entry in habit_entries]
+		routine_pairs = [(r, HabitStatus.VACATION) for r, _ in routine_pairs]
 
 	sections: dict[str, dict[str, list]] = {
 		"daily": {"habits": [], "routines": []},
@@ -116,11 +142,18 @@ async def today_view(
 		"interval": {"habits": [], "routines": []},
 	}
 
-	for habit, status in habit_pairs:
+	current_hour = client_hour if client_hour is not None else datetime.now(timezone.utc).hour
+	is_today = target == today
+
+	for entry in habit_entries:
+		habit = entry[0]
 		key = _HABIT_SECTION.get(habit.frequency)
 		if key is None:
 			continue		# CUSTOM — skip
-		sections[key]["habits"].append((habit, status))
+		# Time-of-day gating is a "focus on now" concept — Today tab only
+		if scope == "today" and is_today and not _section_visible(habit, current_hour):
+			continue
+		sections[key]["habits"].append(entry)
 
 	for routine, status in routine_pairs:
 		key = _ROUTINE_SECTION.get(routine.frequency)

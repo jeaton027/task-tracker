@@ -8,6 +8,7 @@ from app.models.routine_habit import RoutineHabit  # noqa: F401
 from app.models.routine_session import RoutineSession  # noqa: F401
 from app.models.tag import Tag  # noqa: F401
 from app.models.user import User  # noqa: F401
+from app.models.vacation_period import VacationPeriod  # noqa: F401
 
 __all__ = [
 	"Category",
@@ -18,5 +19,6 @@ __all__ = [
 	"RoutineSession",
 	"Tag",
 	"User",
+	"VacationPeriod",
 	"habit_tags",
 ]

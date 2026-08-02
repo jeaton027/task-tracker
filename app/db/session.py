@@ -10,10 +10,10 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-# get async URL from the sync URL in settings
-# Alembic uses sync driver 
-# app uses async driver: postgresql+psycopg_async://
-_async_database_url = settings.database_url.replace(
+_raw_url = settings.database_url
+if _raw_url.startswith("postgresql://"):
+    _raw_url = _raw_url.replace("postgresql://", "postgresql+psycopg://", 1)
+_async_database_url = _raw_url.replace(
     "postgresql+psycopg://",
     "postgresql+psycopg_async://",
 )

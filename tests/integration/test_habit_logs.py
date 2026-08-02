@@ -656,3 +656,78 @@ async def test_today_routines_are_user_scoped(client: AsyncClient) -> None:
 	resp = await client.get("/api/v1/habits/today", headers=_auth(token_b))
 	for sec in resp.json().values():
 		assert not any(r["id"] == rid for r in sec["routines"])
+
+
+# ---------------------------------------------------------------------------
+# GET /habits/today?scope=... — Week/Month/Year tab inclusion
+# ---------------------------------------------------------------------------
+
+async def _make_scoped_habit(
+	client: AsyncClient, token: str, cat_id: str, **overrides,
+) -> str:
+	body = {
+		"name": "Habit", "mode": "DO", "frequency": "DAILY",
+		"start_date": "2026-01-01", "category_id": cat_id,
+	}
+	body.update(overrides)
+	resp = await client.post("/api/v1/habits", json=body, headers=_auth(token))
+	assert resp.status_code == 201, resp.text
+	return resp.json()["id"]
+
+
+async def _habit_names_for_scope(
+	client: AsyncClient, token: str, target: str, scope: str | None,
+) -> set[str]:
+	url = f"/api/v1/habits/today?date={target}"
+	if scope:
+		url += f"&scope={scope}"
+	resp = await client.get(url, headers=_auth(token))
+	assert resp.status_code == 200
+	return {
+		h["name"]
+		for sec in resp.json().values()
+		for h in sec["habits"]
+	}
+
+
+@pytest.mark.anyio
+async def test_scope_week_includes_unscheduled_weekly_habit(
+	client: AsyncClient,
+) -> None:
+	"""A Mon-Fri weekly habit isn't due on Saturday, but still belongs on the
+	Week tab. 2026-01-10 is a Saturday.
+	"""
+	token = await _register_and_login(client)
+	cat_id = await _first_category_id(client, token)
+	await _make_scoped_habit(
+		client, token, cat_id,
+		name="Center", frequency="WEEKLY", scheduled_weekdays=[0, 1, 2, 3, 4],
+	)
+
+	assert "Center" not in await _habit_names_for_scope(client, token, "2026-01-10", None)
+	assert "Center" in await _habit_names_for_scope(client, token, "2026-01-10", "week")
+
+
+@pytest.mark.anyio
+async def test_scope_tabs_filter_by_frequency(client: AsyncClient) -> None:
+	"""Week = daily+weekly (+intervals <=7d); Month adds monthly (+intervals
+	<=31d); Year has everything.
+	"""
+	token = await _register_and_login(client)
+	cat_id = await _first_category_id(client, token)
+	await _make_scoped_habit(client, token, cat_id, name="D", frequency="DAILY")
+	await _make_scoped_habit(client, token, cat_id, name="W", frequency="WEEKLY")
+	await _make_scoped_habit(client, token, cat_id, name="M", frequency="MONTHLY")
+	await _make_scoped_habit(client, token, cat_id, name="Y", frequency="YEARLY")
+	await _make_scoped_habit(
+		client, token, cat_id, name="I3", frequency="INTERVAL", interval_days=3,
+	)
+	await _make_scoped_habit(
+		client, token, cat_id, name="I60", frequency="INTERVAL", interval_days=60,
+	)
+
+	assert await _habit_names_for_scope(client, token, "2026-01-10", "week") == {"D", "W", "I3"}
+	assert await _habit_names_for_scope(client, token, "2026-01-10", "month") == {"D", "W", "M", "I3"}
+	assert await _habit_names_for_scope(client, token, "2026-01-10", "year") == {
+		"D", "W", "M", "Y", "I3", "I60",
+	}

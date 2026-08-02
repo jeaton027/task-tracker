@@ -28,9 +28,10 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-	#alembic runs migration as a one-shot script, not a web server
-	#doesn't need async - uses sunc psycopg driver
-	return get_settings().database_url
+	url = get_settings().database_url
+	if url.startswith("postgresql://"):
+		url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+	return url
 
 
 def run_migrations_offline() -> None:

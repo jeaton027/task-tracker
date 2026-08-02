@@ -23,6 +23,14 @@ from app.schemas.routine_session import (
 	RoutineSessionResponse,
 	RoutineSessionStatus,
 )
+from app.schemas.stats import (
+	HabitStatsResponse,
+	PeriodStats,
+	RecordMonth,
+	RecordSet,
+	RecordYear,
+	StreakInfo,
+)
 from app.schemas.tag import TagCreate, TagResponse, TagUpdate
 from app.schemas.today import (
 	RoutineTodayResponse,
@@ -31,6 +39,7 @@ from app.schemas.today import (
 )
 from app.schemas.token import RefreshRequest, TokenResponse
 from app.schemas.user import UserCreate, UserResponse
+from app.schemas.vacation import VacationCreate, VacationResponse, VacationUpdate
 
 __all__ = [
 	"CalendarDay",
@@ -41,9 +50,15 @@ __all__ = [
 	"HabitLogCreate",
 	"HabitLogResponse",
 	"HabitResponse",
+	"HabitStatsResponse",
 	"HabitStatus",
 	"HabitTodayResponse",
 	"HabitUpdate",
+	"PeriodStats",
+	"RecordMonth",
+	"RecordSet",
+	"RecordYear",
+	"StreakInfo",
 	"MonthlyCalendarResponse",
 	"MonthlySummary",
 	"RefreshRequest",
@@ -63,5 +78,8 @@ __all__ = [
 	"TokenResponse",
 	"UserCreate",
 	"UserResponse",
+	"VacationCreate",
+	"VacationResponse",
+	"VacationUpdate",
 	"WeeklyCalendarItem",
 ]

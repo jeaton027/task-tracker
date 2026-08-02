@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.calendar import MonthlyCalendarResponse, WeeklyCalendarItem
+from app.schemas.calendar import MonthlyCalendarResponse, WeeklyCalendarItem, YearlyCalendarItem
 from app.services import auth_service, calendar_service
 
 router = APIRouter(prefix="/calendar", tags=["calendar"])
@@ -23,6 +23,15 @@ async def weekly(
 	),
 ) -> list[WeeklyCalendarItem]:
 	return await calendar_service.weekly_view(db, current_user.id, target_date)
+
+
+@router.get("/yearly", response_model=list[YearlyCalendarItem])
+async def yearly(
+	db: AsyncSession = Depends(get_db),
+	current_user: User = Depends(auth_service.get_current_user),
+	year: int = Query(..., description="Year to view (e.g. 2026)."),
+) -> list[YearlyCalendarItem]:
+	return await calendar_service.yearly_view(db, current_user.id, year)
 
 
 @router.get("/monthly", response_model=MonthlyCalendarResponse)

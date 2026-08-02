@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.models.habit import HabitFrequency, HabitMode
+from app.models.habit import HabitFrequency, HabitMode, HabitSection
 from app.schemas.tag import TagResponse
 
 _MMDD_RE = re.compile(r"^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$")
@@ -73,15 +73,21 @@ class HabitCreate(BaseModel):
 	frequency: HabitFrequency
 	start_date: date
 	end_date: date | None = None
-	category_id: uuid.UUID
+	section: HabitSection | None = None
+	category_id: uuid.UUID | None = None
 	is_active: bool = True
+	is_archived: bool = False
 	target_per_period: int | None = Field(default=None, ge=0)
 	increment: float = Field(default=1.0, gt=0)
 	scheduled_weekdays: list[int] = Field(default_factory=list)
 	scheduled_days_of_month: list[int] = Field(default_factory=list)
 	scheduled_dates: list[str] = Field(default_factory=list)
 	interval_days: int | None = Field(default=None, gt=0)
+	days_per_week: int | None = Field(default=None, ge=1, le=7)
+	color_key: str | None = Field(default=None, max_length=50)
+	unit: str | None = Field(default=None, max_length=50)
 	tag_ids: list[uuid.UUID] = Field(default_factory=list)
+	routine_ids: list[uuid.UUID] = Field(default_factory=list)
 
 	@model_validator(mode="after")
 	def _check(self) -> "HabitCreate":
@@ -94,6 +100,8 @@ class HabitCreate(BaseModel):
 			self.scheduled_dates,
 			self.interval_days,
 		)
+		if self.days_per_week is not None and self.frequency != HabitFrequency.WEEKLY:
+			raise ValueError("days_per_week is only valid for WEEKLY habits.")
 		return self
 
 
@@ -114,15 +122,21 @@ class HabitUpdate(BaseModel):
 	frequency: HabitFrequency | None = None
 	start_date: date | None = None
 	end_date: date | None = None
+	section: HabitSection | None = None
 	category_id: uuid.UUID | None = None
 	is_active: bool | None = None
+	is_archived: bool | None = None
 	target_per_period: int | None = Field(default=None, ge=0)
 	increment: float | None = Field(default=None, gt=0)
 	scheduled_weekdays: list[int] | None = None
 	scheduled_days_of_month: list[int] | None = None
 	scheduled_dates: list[str] | None = None
 	interval_days: int | None = Field(default=None, gt=0)
+	days_per_week: int | None = Field(default=None, ge=1, le=7)
+	color_key: str | None = Field(default=None, max_length=50)
+	unit: str | None = Field(default=None, max_length=50)
 	tag_ids: list[uuid.UUID] | None = None
+	routine_ids: list[uuid.UUID] | None = None
 
 
 class HabitResponse(BaseModel):
@@ -138,14 +152,19 @@ class HabitResponse(BaseModel):
 	frequency: HabitFrequency
 	start_date: date
 	end_date: date | None
-	category_id: uuid.UUID
+	section: HabitSection | None
+	category_id: uuid.UUID | None
 	is_active: bool
+	is_archived: bool
 	target_per_period: int
 	increment: float
 	scheduled_weekdays: list[int]
 	scheduled_days_of_month: list[int]
 	scheduled_dates: list[str]
 	interval_days: int | None
+	days_per_week: int | None
+	color_key: str | None
+	unit: str | None
 	tags: list[TagResponse]
 	created_at: datetime
 	updated_at: datetime

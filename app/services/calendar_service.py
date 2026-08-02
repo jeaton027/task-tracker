@@ -13,10 +13,11 @@ from app.schemas.calendar import (
 	MonthlyCalendarResponse,
 	MonthlySummary,
 	WeeklyCalendarItem,
+	YearlyCalendarItem,
 )
 from app.schemas.habit import HabitResponse
 from app.schemas.habit_log import HabitStatus
-from app.services import habit_service
+from app.services import habit_service, vacation_service
 from app.services.habit_log_service import (
 	compute_status,
 	is_due_on,
@@ -61,14 +62,18 @@ def _day_cell(
 	day: date,
 	daily: dict[tuple[uuid.UUID, date], float],
 	today: date,
+	vacation_dates: frozenset[date],
 ) -> CalendarDay:
 	"""Build one calendar cell: per-day amount + per-period status.
 
-	NOT_SCHEDULED if the habit isn't due on this day. Otherwise compute status
-	from the period total (which spans more than just `day` for period habits).
-	Amount is always the day's actual logged amount, independent of status.
+	Precedence:
+	  1. day in vacation -> VACATION  (display override; amount still shown)
+	  2. habit not due that day -> NOT_SCHEDULED
+	  3. otherwise -> compute_status against the period total
 	"""
 	day_amount = daily.get((habit.id, day), 0.0)
+	if day in vacation_dates:
+		return CalendarDay(date=day, status=HabitStatus.VACATION, amount=day_amount)
 	if not is_due_on(habit, day):
 		return CalendarDay(date=day, status=HabitStatus.NOT_SCHEDULED, amount=day_amount)
 	ps, pe = period_bounds(habit, day)
@@ -114,10 +119,13 @@ async def weekly_view(
 		db, [h.id for h in habits], fetch_start, fetch_end
 	)
 	daily = _daily_by_habit(logs)
+	vacation_dates = await vacation_service.get_user_vacation_dates(db, user_id)
 
 	items: list[WeeklyCalendarItem] = []
 	for habit in habits:
-		day_cells = [_day_cell(habit, day, daily, today) for day in week_days]
+		day_cells = [
+			_day_cell(habit, day, daily, today, vacation_dates) for day in week_days
+		]
 		items.append(
 			WeeklyCalendarItem(
 				habit=HabitResponse.model_validate(habit),
@@ -147,6 +155,59 @@ def _parse_month(month_str: str) -> tuple[int, int]:
 		raise ValueError("month must be between 01 and 12")
 	return year, month
 
+
+# ---------------------------------------------------------------------------
+# Yearly view
+# ---------------------------------------------------------------------------
+
+async def yearly_view(
+	db: AsyncSession,
+	user_id: uuid.UUID,
+	year: int,
+) -> list[YearlyCalendarItem]:
+	today = today_utc()
+	jan1 = date(year, 1, 1)
+	dec31 = date(year, 12, 31)
+	num_days = (dec31 - jan1).days + 1
+	year_days = [jan1 + timedelta(days=i) for i in range(num_days)]
+
+	habits = await habit_repository.get_all_by_user(db, user_id)
+	if not habits:
+		return []
+
+	all_starts: list[date] = []
+	all_ends: list[date] = []
+	for habit in habits:
+		for day in (jan1, dec31):
+			ps, pe = period_bounds(habit, day)
+			all_starts.append(ps)
+			all_ends.append(pe)
+	fetch_start = min(all_starts)
+	fetch_end = max(all_ends)
+
+	logs = await habit_log_repository.get_by_habit_ids_and_date_range(
+		db, [h.id for h in habits], fetch_start, fetch_end
+	)
+	daily = _daily_by_habit(logs)
+	vacation_dates = await vacation_service.get_user_vacation_dates(db, user_id)
+
+	items: list[YearlyCalendarItem] = []
+	for habit in habits:
+		day_cells = [
+			_day_cell(habit, day, daily, today, vacation_dates) for day in year_days
+		]
+		items.append(
+			YearlyCalendarItem(
+				habit=HabitResponse.model_validate(habit),
+				days=day_cells,
+			)
+		)
+	return items
+
+
+# ---------------------------------------------------------------------------
+# Monthly view (single habit)
+# ---------------------------------------------------------------------------
 
 async def monthly_view(
 	db: AsyncSession,
@@ -180,6 +241,7 @@ async def monthly_view(
 		db, [habit_id], fetch_start, fetch_end
 	)
 	daily = _daily_by_habit(logs)
+	vacation_dates = await vacation_service.get_user_vacation_dates(db, user_id)
 
 	day_cells: list[CalendarDay] = []
 	scheduled = 0
@@ -187,9 +249,11 @@ async def monthly_view(
 	failed = 0
 	pending = 0
 	for day in month_days:
-		cell = _day_cell(habit, day, daily, today)
+		cell = _day_cell(habit, day, daily, today, vacation_dates)
 		day_cells.append(cell)
-		if cell.status == HabitStatus.NOT_SCHEDULED:
+		# Summary excludes both NOT_SCHEDULED and VACATION days (the habit
+		# wasn't expected on those days for stats purposes).
+		if cell.status in (HabitStatus.NOT_SCHEDULED, HabitStatus.VACATION):
 			continue
 		scheduled += 1
 		if cell.status == HabitStatus.SUCCESS:

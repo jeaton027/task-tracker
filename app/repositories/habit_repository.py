@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.habit import Habit, HabitFrequency, HabitMode
+from app.models.habit import Habit, HabitFrequency, HabitMode, HabitSection
 from app.models.tag import Tag
 
 
@@ -41,16 +41,21 @@ async def create(
 	mode: HabitMode,
 	frequency: HabitFrequency,
 	start_date: date,
-	category_id: uuid.UUID,
+	section: HabitSection | None = None,
+	category_id: uuid.UUID | None = None,
 	target_per_period: int,
 	increment: float,
 	description: str | None = None,
 	end_date: date | None = None,
 	is_active: bool = True,
+	is_archived: bool = False,
 	scheduled_weekdays: list[int] | None = None,
 	scheduled_days_of_month: list[int] | None = None,
 	scheduled_dates: list[str] | None = None,
 	interval_days: int | None = None,
+	days_per_week: int | None = None,
+	color_key: str | None = None,
+	unit: str | None = None,
 	tags: list[Tag] | None = None,
 ) -> Habit:
 	habit = Habit(
@@ -61,14 +66,19 @@ async def create(
 		frequency=frequency,
 		start_date=start_date,
 		end_date=end_date,
+		section=section,
 		category_id=category_id,
 		is_active=is_active,
+		is_archived=is_archived,
 		target_per_period=target_per_period,
 		increment=increment,
 		scheduled_weekdays=scheduled_weekdays or [],
 		scheduled_days_of_month=scheduled_days_of_month or [],
 		scheduled_dates=scheduled_dates or [],
 		interval_days=interval_days,
+		days_per_week=days_per_week,
+		color_key=color_key,
+		unit=unit,
 		tags=tags or [],			# assigned in-memory; commit writes join rows
 	)
 	db.add(habit)

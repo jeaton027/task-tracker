@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 	from app.models.tag import Tag
 	from app.models.habit import Habit
 	from app.models.routine import Routine
+	from app.models.vacation_period import VacationPeriod
 
 
 class User(Base):
@@ -68,6 +69,11 @@ class User(Base):
 	)
 	routines: Mapped[list["Routine"]] = relationship(
 		"Routine",
+		back_populates="user",
+		cascade="all, delete-orphan",
+	)
+	vacations: Mapped[list["VacationPeriod"]] = relationship(
+		"VacationPeriod",
 		back_populates="user",
 		cascade="all, delete-orphan",
 	)

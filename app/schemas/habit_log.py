@@ -17,11 +17,13 @@ class HabitStatus(str, enum.Enum):
 	  AVOID + sum<=target          -> SUCCESS
 	  AVOID + sum>target           -> FAILED (instant)
 	  not due that day             -> NOT_SCHEDULED  (calendar views only)
+	  date covered by a vacation   -> VACATION       (display override)
 	"""
 	SUCCESS = "SUCCESS"
 	PENDING = "PENDING"
 	FAILED = "FAILED"
 	NOT_SCHEDULED = "NOT_SCHEDULED"
+	VACATION = "VACATION"
 
 
 class HabitLogCreate(BaseModel):
@@ -36,7 +38,7 @@ class HabitLogCreate(BaseModel):
 
 
 class HabitLogResponse(BaseModel):
-	"""Shape of a habit_log row returned to the client."""
+	"""shape of a habit_log row returned to client."""
 	model_config = ConfigDict(from_attributes=True)
 
 	id: uuid.UUID
@@ -48,5 +50,7 @@ class HabitLogResponse(BaseModel):
 
 
 class HabitTodayResponse(HabitResponse):
-	"""A habit due on the requested date, plus its computed status."""
+	"""A habit due on the requested date + its computed status."""
 	status: HabitStatus
+	current_period_count: float
+	week_completed_days: int | None = None

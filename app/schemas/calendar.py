@@ -44,3 +44,9 @@ class MonthlyCalendarResponse(BaseModel):
 	month: str					# "YYYY-MM"
 	days: list[CalendarDay]		# every day of the month (28-31 entries)
 	summary: MonthlySummary
+
+
+class YearlyCalendarItem(BaseModel):
+	"""One row in the yearly grid: a habit and its 365/366-day status strip."""
+	habit: HabitResponse
+	days: list[CalendarDay]		# Jan 1 -> Dec 31 (365 or 366 entries)

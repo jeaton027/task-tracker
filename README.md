@@ -1,8 +1,25 @@
-# Habit Tracker API
+# Daybook
 
-A production-style backend API for building and tracking personal habits. Users can create habits in two modes — **DO** (mark done to succeed) or **AVOID** (not logging it is the win) — and track them on daily, weekly, monthly, or custom schedules. The app surfaces calendar views, streak data, and eventually AI-generated insights to help users understand their patterns over time.
+A full-stack habit tracking app built for personal use. Create habits, group them into routines, and track progress across daily, weekly, monthly, and yearly views. Habits support two modes — **DO** (build a habit) and **AVOID** (break one) — with flexible scheduling, quantified targets, streak tracking, and vacation pauses.
 
-Built as a full-stack portfolio project. Backend first, React frontend to follow.
+The backend is a FastAPI REST API with PostgreSQL. The frontend is a React Native app (Expo SDK 56) designed for Android.
+
+---
+
+## What It Does
+
+- **Habit tracking** with DO and AVOID modes, each with configurable targets (e.g. "drink 8 glasses of water" or "limit coffee to 2 cups")
+- **Flexible scheduling**: daily, weekly, monthly, yearly, or custom intervals — with support for compound goals like "3x/day, 2 days/week"
+- **Routines**: group habits into named sequences (Morning, Gym, Wind Down) and check them off in order
+- **Four time views**: Today, Week, Month, Year — each showing only the habits relevant to that scope
+- **Calendar views**: weekly heatmap bars and monthly per-habit grids showing completion history
+- **Streaks and stats**: current streak, personal best, completion rates with period filtering
+- **Trends**: line charts tracking up to 4 habits over time with a filterable picker
+- **Vacation mode**: schedule date ranges where habits are paused, not failed
+- **Grace period**: edit check-ins up to 3 days in the past
+- **Sections**: organize habits into Morning, Day, and Evening groups
+- **Categories and tags**: classify and filter habits
+- **Auth**: JWT-based with access/refresh tokens, password change, and password reset flow
 
 ---
 
@@ -10,158 +27,110 @@ Built as a full-stack portfolio project. Backend first, React frontend to follow
 
 | Layer | Technology |
 |---|---|
-| Language | Python 3.12 |
-| Framework | FastAPI |
-| Database | PostgreSQL |
+| Mobile | React Native (Expo SDK 56), TypeScript |
+| State | React Query (TanStack Query) |
+| Backend | Python 3.12, FastAPI |
+| Database | PostgreSQL 16 |
 | ORM | SQLAlchemy 2.0 (async) |
 | Migrations | Alembic |
-| Auth | JWT (access + refresh tokens), passlib/bcrypt |
-| Containerization | Docker + Docker Compose |
+| Auth | JWT (access + refresh + reset tokens), bcrypt |
+| Containers | Docker + Docker Compose |
 | Testing | pytest + httpx |
-| Linting / Formatting | Ruff, Black, mypy |
+| Linting | Ruff, Black, mypy |
 
 ---
 
 ## Architecture
 
-This project uses a **layered repository pattern**:
+### Backend
+
+Layered repository pattern — each layer has a single responsibility:
 
 ```
-Request → API (router) → Service → Repository → Database
-           validates       business    SQL only
-           HTTP stuff      logic
+Request → Router → Service → Repository → Database
+          (HTTP)   (rules)    (SQL)
 ```
 
-- **`app/api/`** — HTTP layer: request validation, response formatting, route definitions
-- **`app/services/`** — Business logic: scheduling rules, DO/AVOID logic, streak calculations
-- **`app/repositories/`** — Database layer: all SQL queries live here, nothing else
+- **`app/api/v1/`** — Route definitions, request validation, response formatting
+- **`app/services/`** — Business logic: scheduling, streak calculations, DO/AVOID rules, stat aggregation
+- **`app/repositories/`** — Database queries, nothing else
 - **`app/models/`** — SQLAlchemy ORM models
-- **`app/schemas/`** — Pydantic models for request/response validation
+- **`app/schemas/`** — Pydantic models for request/response shapes
+
+### Mobile
+
+```
+Screen → React Query hook → API endpoint function → apiFetch (JWT-managed)
+```
+
+- **`mobile/src/screens/`** — Full-screen views (Today, Stats, Settings, Habit Detail, etc.)
+- **`mobile/src/components/`** — Reusable UI: habit rows, status buttons, heatmaps, navigation, form controls
+- **`mobile/src/api/`** — Typed endpoint functions, React Query hooks, optimistic update logic
+- **`mobile/src/auth/`** — Auth context with secure token storage
 
 ---
 
-## Feature Goals
+## API Endpoints
 
-- **Habit tracking** with DO and AVOID modes
-  - DO habit: mark it done → green. Don't mark it → red.
-  - AVOID habit: don't log it → green. Log it → red.
-- **Flexible scheduling**: daily, weekly, monthly, or custom intervals
-- **Terminal or ongoing habits**: optionally set an end date
-- **Categories**: one per habit — Morning / Day / Evening (or custom)
-- **Tags**: freeform, multiple per habit (e.g. "health", "work")
-- **Calendar views**:
-  - Weekly: stacked red/green bars across 7 days
-  - Monthly: per-habit view showing each day's status
-- **Streak tracking**: current streak and personal best per habit
-- **Vacation mode**: pre-schedule a date range where habits are paused, not failed
-- **Grace period**: edit check-ins up to 3 days in the past
-- **TODO task list**: one-time non-recurring tasks (Phase 7)
-- **Analytics**: completion rates, day-of-week patterns, weakest/strongest habits
-- **Notifications**: reminders (platform TBD)
-- **AI insights**: LLM-generated analysis of habit patterns (Phase 9)
-- **React frontend**: full UI to consume this API (Phase 10)
+### Auth
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/v1/auth/register` | Create account |
+| POST | `/api/v1/auth/login` | Get access + refresh tokens |
+| POST | `/api/v1/auth/refresh` | Refresh an expired access token |
+| GET | `/api/v1/auth/me` | Current user |
+| POST | `/api/v1/auth/change-password` | Update password (authenticated) |
+| POST | `/api/v1/auth/forgot-password` | Request password reset |
+| POST | `/api/v1/auth/reset-password` | Reset password with token |
 
----
+### Habits
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/habits` | List all habits |
+| POST | `/api/v1/habits` | Create a habit |
+| PATCH | `/api/v1/habits/{id}` | Update a habit |
+| DELETE | `/api/v1/habits/{id}` | Delete a habit |
+| GET | `/api/v1/habits/today` | All habits due today with status |
+| POST | `/api/v1/habits/{id}/log` | Log a habit (with optional amount) |
+| DELETE | `/api/v1/habits/{id}/log` | Remove a log entry |
+| GET | `/api/v1/habits/{id}/stats` | Streak, completion rate, history |
 
-## Roadmap
+### Calendar
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/calendar/weekly` | 7-day status bars for all habits |
+| GET | `/api/v1/calendar/monthly` | Per-habit month grid |
+| GET | `/api/v1/calendar/yearly` | Year overview |
 
-### Phase 0 — Scaffold
-- ~~Project structure, FastAPI app, CORS middleware~~
-- ~~Pydantic settings with `.env` support~~
-- ~~Versioned API routing (`/api/v1/`)~~
-- ~~Health check endpoint~~
-- ~~Docker + Docker Compose (API + PostgreSQL)~~
-- ~~pytest setup with integration test for health check~~
+### Stats
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/stats/overview` | Aggregate stats across all habits |
+| GET | `/api/v1/stats/trends` | Time-series data for selected habits |
 
----
-
-### Phase 1 — Database Foundation
-> Alembic, SQLAlchemy async sessions, JWT auth
-
-- ~~**Step 1** — Configure Alembic + wire up async DB session (`db/session.py`, `db/base.py`, `alembic.ini`)~~
-- ~~**Step 2** — `User` model + first Alembic migration~~
-- ~~**Step 3** — Auth endpoints: register, login, refresh token, `/me`~~
-  - ~~Password hashing (bcrypt direct — SHA-256 pre-hash to handle 72-byte limit)~~
-  - ~~JWT creation and validation (python-jose)~~
-  - ~~`get_current_user` dependency for protected routes~~
-
----
-
-### Phase 2 — Habit Data Model
-> SQLAlchemy relationships, many-to-many joins, Pydantic schemas
-
-- **Step 4** — `Category` model + CRUD (default: Morning / Day / Evening)
-- **Step 5** — `Tag` model + CRUD (freeform, user-owned)
-- **Step 6** — `Habit` model + CRUD
-  - Fields: `name`, `description`, `mode` (DO/AVOID), `frequency` (daily/weekly/monthly/custom), `start_date`, `end_date` (optional), `category_id`, `is_active`
-- **Step 7** — Habit ↔ Tag many-to-many association + migration
+### Other
+| Method | Path | Description |
+|---|---|---|
+| CRUD | `/api/v1/categories` | Habit categories |
+| CRUD | `/api/v1/routines` | Routine management |
+| CRUD | `/api/v1/vacations` | Vacation periods |
+| GET | `/api/v1/health` | Health check |
 
 ---
 
-### Phase 3 — Daily Tracking
-> Date logic, business rules, service layer patterns
+## Data Model
 
-- **Step 8** — `HabitLog` model + migration
-- **Step 9** — Check-in endpoints
-  - `GET /habits/today` — all habits due today with current status
-  - `POST /habits/{id}/log` — mark a habit done
-  - `DELETE /habits/{id}/log` — unmark a habit (supports grace period)
-
----
-
-### Phase 4 — Calendar Views
-> Date aggregation, query optimization
-
-- **Step 10** — Weekly calendar endpoint
-  - `GET /calendar/weekly?date=YYYY-MM-DD` — 7-day view with red/green status per habit
-- **Step 11** — Monthly per-habit calendar endpoint
-  - `GET /calendar/monthly?habit_id=X&month=YYYY-MM` — full month, day-by-day status
-
----
-
-### Phase 5 — Streaks
-> Stateful tracking, computed fields
-
-- **Step 12** — Streak calculation (current streak + personal best per habit)
-  - `GET /habits/{id}/stats` — streak, completion rate, longest run
-
----
-
-### Phase 6 — Advanced Habit Features
-> Scheduling edge cases, soft overrides
-
-- **Step 13** — Vacation mode (`VacationPeriod` model — habits auto-skip, not fail, during a date range)
-- **Step 14** — Grace period (allow editing logs up to 3 days in the past)
-
----
-
-### Phase 7 — TODO Task List
-> Second item type, polymorphic data modeling
-
-- **Step 15** — `Task` model (one-time, non-recurring, with due date + priority)
-- **Step 16** — Task CRUD + completion endpoint
-
----
-
-### Phase 8 — Analytics & Notifications
-> Aggregation queries, background jobs
-
-- **Step 17** — Analytics endpoints (completion rates, weakest/strongest habits, day-of-week patterns)
-- **Step 18** — Notification scaffolding (push / email — platform TBD)
-
----
-
-### Phase 9 — AI Insights
-> LLM API integration, prompt engineering
-
-- **Step 19** — AI-generated habit analysis (Claude or OpenAI) based on log history and patterns
-
----
-
-### Phase 10 — React Frontend
-> Full-stack integration
-
-- **Step 20+** — React app: habit list, daily check-in UI, weekly/monthly calendar views, streak display
+```
+User
+ ├── Habit (mode, frequency, target, schedule, section, color, unit)
+ │    ├── HabitLog (date, amount)
+ │    └── Tag (many-to-many)
+ ├── Category
+ ├── Routine
+ │    ├── RoutineHabit (ordered habit list)
+ │    └── RoutineSession (completion log)
+ └── VacationPeriod (start_date, end_date)
+```
 
 ---
 
@@ -169,16 +138,32 @@ Request → API (router) → Service → Repository → Database
 
 ### Prerequisites
 - Docker + Docker Compose
+- Node.js 18+
+- Expo CLI (`npx expo`)
 
-### Start the stack
+### Start the backend
 
 ```bash
 docker compose up --build
 ```
 
-API will be available at `http://localhost:8000`
-Interactive docs (Swagger UI) at `http://localhost:8000/docs`
-Health check at `http://localhost:8000/api/v1/health`
+API at `http://localhost:8000` — Swagger docs at `http://localhost:8000/docs`
+
+### Run migrations
+
+```bash
+docker compose exec api alembic upgrade head
+```
+
+### Start the mobile app
+
+```bash
+cd mobile
+npm install
+npx expo start
+```
+
+Press `a` for Android emulator or scan the QR code with Expo Go.
 
 ### Run tests
 
@@ -188,8 +173,6 @@ docker compose exec api pytest
 
 ### Environment variables
 
-Copy `.env.example` to `.env` and update as needed:
-
 ```bash
 cp .env.example .env
 ```
@@ -198,35 +181,16 @@ cp .env.example .env
 |---|---|
 | `APP_ENV` | `development` or `production` |
 | `DATABASE_URL` | PostgreSQL connection string |
-| `SECRET_KEY` | Secret used to sign JWTs — change in production |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | How long access tokens live (default: 15) |
-| `REFRESH_TOKEN_EXPIRE_MINUTES` | How long refresh tokens live (default: 7 days) |
-| `CORS_ORIGINS` | Comma-separated list of allowed frontend origins |
+| `SECRET_KEY` | Secret for signing JWTs — change in production |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Access token lifetime (default: 15) |
+| `REFRESH_TOKEN_EXPIRE_MINUTES` | Refresh token lifetime (default: 7 days) |
+| `CORS_ORIGINS` | Comma-separated allowed origins |
 
+---
 
+## Future Plans
 
-# Creating and defining each feature
-
-app/models/tag.py 						: defines the table / columns / relationships
-app/schemas/tag.py         				: defines what valid data looks like (input/output shapes)
-app/repositories/tag_repository.py 		: raw database queries (CRUD)
-app/services/tag_service.py 			: business logic (rules, validation)
-app/api/v1/tags.py 						: HTTP endpoints (routes)
-
-
-
-
-# docker commands
-Run a command inside the running API container
-	docker compose exec api <command>
-
-Examples:
-	docker compose exec api alembic upgrade head       # run migrations
-	docker compose exec api pytest                     # run tests
-	docker compose exec api alembic revision --autogenerate -m "add user table"  # generate a migration
-
-Stop Docker cleanly
-	docker compose down
-
-Stop AND wipe the database volume (nuclear reset)
-	docker compose down -v
+- Email delivery for password reset flow
+- Interval-based habit scheduling (every N days/weeks)
+- AI-generated habit insights based on log history
+- Notification reminders

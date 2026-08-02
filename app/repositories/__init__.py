@@ -7,6 +7,7 @@ from app.repositories import (
 	routine_session_repository,
 	tag_repository,
 	user_repository,
+	vacation_repository,
 )
 
 __all__ = [
@@ -17,4 +18,5 @@ __all__ = [
 	"routine_session_repository",
 	"tag_repository",
 	"user_repository",
+	"vacation_repository",
 ]

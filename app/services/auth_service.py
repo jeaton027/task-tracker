@@ -5,6 +5,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import logging
+
 from app.core.security import (
 	create_access_token,
 	create_refresh_token,
@@ -12,6 +14,8 @@ from app.core.security import (
 	hash_password,
 	verify_password,
 )
+
+log = logging.getLogger(__name__)
 from app.db.session import get_db
 from app.models.user import User
 from app.repositories import user_repository
@@ -103,3 +107,54 @@ async def get_current_user(
 	if not user or not user.is_active:
 		raise exc
 	return user
+
+
+async def change_password(
+	db: AsyncSession,
+	user: User,
+	current_password: str,
+	new_password: str,
+) -> None:
+	if not verify_password(current_password, user.hashed_password):
+		raise HTTPException(
+			status_code=status.HTTP_400_BAD_REQUEST,
+			detail="Current password is incorrect.",
+		)
+	user.hashed_password = hash_password(new_password)
+	await db.commit()
+
+
+def _create_reset_token(user_id: str) -> str:
+	from app.core.security import _create_token
+	return _create_token(user_id, "reset", expire_minutes=30)
+
+
+async def forgot_password(db: AsyncSession, email: str) -> None:
+	user = await user_repository.get_by_email(db, email)
+	if not user:
+		return
+	token = _create_reset_token(str(user.id))
+	# TODO: send email with reset link containing this token
+	log.info("Password reset token for %s: %s", email, token)
+
+
+async def reset_password(db: AsyncSession, token: str, new_password: str) -> None:
+	exc = HTTPException(
+		status_code=status.HTTP_400_BAD_REQUEST,
+		detail="Invalid or expired reset link.",
+	)
+	try:
+		payload = decode_token(token)
+		if payload.get("type") != "reset":
+			raise exc
+		user_id = payload.get("sub")
+		if not user_id:
+			raise exc
+	except JWTError:
+		raise exc
+
+	user = await user_repository.get_by_id(db, uuid.UUID(user_id))
+	if not user:
+		raise exc
+	user.hashed_password = hash_password(new_password)
+	await db.commit()
