@@ -46,6 +46,7 @@ import {
 	CustomizeSheet,
 	type CustomCadence,
 } from '../components/createHabit/CustomizeSheet';
+import { AutoLogSection } from '../components/editHabit/AutoLogSection';
 import { Icon } from '../components/ui/Icon';
 import { FONTS, RADII, useTheme } from '../theme';
 
@@ -358,6 +359,9 @@ export function EditHabitScreen({ visible, habitId, onClose }: EditHabitScreenPr
 								return routine.id;
 							}}
 						/>
+
+						{/* ── Auto-log (RepCue) ───────────────────── */}
+						<AutoLogSection habitId={habitId} />
 
 						{/* ── Active toggle ──────────────────────────── */}
 						<View style={[eStyles.toggleRow, { borderBottomColor: colors.line }]}>

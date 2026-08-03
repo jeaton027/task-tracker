@@ -40,9 +40,9 @@
               "name": "DaybookToday",
               "label": "Daybook: Today",
               "description": "Today's habits with one-tap logging",
-              "minWidth": "250dp",
+              "minWidth": "180dp",
               "minHeight": "140dp",
-              "targetCellWidth": 4,
+              "targetCellWidth": 3,
               "targetCellHeight": 3,
               "resizeMode": "horizontal|vertical",
               "updatePeriodMillis": 1800000,
@@ -63,6 +63,11 @@
           ]
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "c263a67a-386a-4811-bea0-4fdd6126bf30"
+      }
+    }
   }
 }

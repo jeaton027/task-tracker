@@ -56,6 +56,32 @@ export type VacationCreate    = S['VacationCreate'];
 export type VacationResponse  = S['VacationResponse'];
 export type VacationUpdate    = S['VacationUpdate'];
 
+// integrations
+export interface IntegrationConfig {
+	source?: string;
+	match_mode: 'ANY' | 'SPECIFIC';
+	workout_ids: string[];
+	category_ids: string[];
+	collection_ids: string[];
+}
+
+export interface IntegrationResponse {
+	id: string;
+	habit_id: string;
+	source: string;
+	match_mode: 'ANY' | 'SPECIFIC';
+	workout_ids: string[];
+	category_ids: string[];
+	collection_ids: string[];
+}
+
+export interface IntegrationKeyResponse {
+	id: string;
+	label: string;
+	created_at: string;
+	key?: string | null;
+}
+
 // calendar
 export type CalendarDay              = S['CalendarDay'];
 export type WeeklyCalendarItem       = S['WeeklyCalendarItem'];

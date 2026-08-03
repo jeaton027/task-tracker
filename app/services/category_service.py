@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.category import Category
 from app.repositories import category_repository
 
-_DEFAULT_CATEGORIES = ["Morning", "Day", "Evening"]
+_DEFAULT_CATEGORIES = ["Health", "Personal"]
 
 
 async def seed_defaults(db: AsyncSession, user_id: uuid.UUID) -> None:

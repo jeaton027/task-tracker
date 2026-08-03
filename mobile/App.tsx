@@ -1,4 +1,6 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
+import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
 import {
 	FamiljenGrotesk_400Regular,
@@ -33,12 +35,19 @@ const queryClient = new QueryClient({
 	defaultOptions: {
 		queries: {
 			retry: 1,
-			// React Native doesn't have window focus; foreground-focus refetching
-			// is fine to enable later via TanStack's focusManager when needed.
-			refetchOnWindowFocus: false,
+			refetchOnWindowFocus: true,
 		},
 	},
 });
+
+function useAppFocusRefetch() {
+	useEffect(() => {
+		const sub = AppState.addEventListener('change', (status: AppStateStatus) => {
+			focusManager.setFocused(status === 'active');
+		});
+		return () => sub.remove();
+	}, []);
+}
 
 function Gate() {
 	const { isAuthenticated, isLoading } = useAuth();
@@ -47,6 +56,7 @@ function Gate() {
 }
 
 export default function App() {
+	useAppFocusRefetch();
 	const [fontsLoaded] = useFonts({
 		HankenGrotesk_400Regular,
 		HankenGrotesk_500Medium,

@@ -27,3 +27,6 @@ htmlcov/
 
 # Docker
 .dockerignore
+
+# Project notes
+projectNotes.md

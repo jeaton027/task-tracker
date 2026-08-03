@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import {
+	KeyboardAvoidingView,
 	Modal,
+	Platform,
 	Pressable,
 	StyleSheet,
 	Text,
 	TextInput,
 	View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '../ui/Icon';
 import { FONTS, PALETTES, RADII, useTheme } from '../../theme';
@@ -136,11 +139,12 @@ export function ColorSheet({
 	onClose: () => void;
 }) {
 	const { colors } = useTheme();
+	const insets = useSafeAreaInsets();
 	return (
 		<Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
 			<Pressable style={styles.sheetBackdrop} onPress={onClose}>
 				<Pressable
-					style={[styles.sheet, { backgroundColor: colors.paper }]}
+					style={[styles.sheet, { backgroundColor: colors.paper, paddingBottom: Math.max(28, insets.bottom + 12) }]}
 					onPress={(e) => e.stopPropagation()}
 				>
 					<View style={[styles.sheetGrip, { backgroundColor: colors.line }]} />
@@ -206,49 +210,52 @@ export function UnitSheet({
 		}
 	};
 
+	const insets = useSafeAreaInsets();
 	return (
 		<Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-			<Pressable style={styles.sheetBackdrop} onPress={onClose}>
-				<Pressable
-					style={[styles.sheet, { backgroundColor: colors.paper }]}
-					onPress={(e) => e.stopPropagation()}
-				>
-					<View style={[styles.sheetGrip, { backgroundColor: colors.line }]} />
-					<Text style={[styles.sheetTitle, { color: colors.ink }]}>Unit</Text>
-					{UNIT_PRESETS.map((u) => (
-						<Pressable
-							key={u}
-							onPress={() => onPick(u)}
-							style={[styles.unitRow, { borderBottomColor: colors.line }]}
-						>
-							<Text style={[styles.unitLabel, { color: colors.ink }]}>{u}</Text>
-							{selected === u && <Icon name="check" size={18} color={colors.accent} strokeWidth={2.6} />}
-						</Pressable>
-					))}
-					{!customMode ? (
-						<Pressable onPress={enterCustom} style={styles.unitRow}>
-							<Text style={[styles.unitLabel, { color: colors.ink }]}>Custom unit…</Text>
-							<Icon name="right" size={16} color={colors.muted} />
-						</Pressable>
-					) : (
-						<View style={styles.customRow}>
-							<TextInput
-								autoFocus
-								value={customValue}
-								onChangeText={setCustomValue}
-								placeholder="e.g. glasses"
-								placeholderTextColor={colors.muted}
-								onSubmitEditing={submitCustom}
-								returnKeyType="done"
-								style={[
-									styles.customInput,
-									{ backgroundColor: colors.card, borderColor: colors.accent, color: colors.ink },
-								]}
-							/>
-						</View>
-					)}
+			<KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+				<Pressable style={styles.sheetBackdrop} onPress={onClose}>
+					<Pressable
+						style={[styles.sheet, { backgroundColor: colors.paper, paddingBottom: Math.max(28, insets.bottom + 12) }]}
+						onPress={(e) => e.stopPropagation()}
+					>
+						<View style={[styles.sheetGrip, { backgroundColor: colors.line }]} />
+						<Text style={[styles.sheetTitle, { color: colors.ink }]}>Unit</Text>
+						{UNIT_PRESETS.map((u) => (
+							<Pressable
+								key={u}
+								onPress={() => onPick(u)}
+								style={[styles.unitRow, { borderBottomColor: colors.line }]}
+							>
+								<Text style={[styles.unitLabel, { color: colors.ink }]}>{u}</Text>
+								{selected === u && <Icon name="check" size={18} color={colors.accent} strokeWidth={2.6} />}
+							</Pressable>
+						))}
+						{!customMode ? (
+							<Pressable onPress={enterCustom} style={styles.unitRow}>
+								<Text style={[styles.unitLabel, { color: colors.ink }]}>Custom unit…</Text>
+								<Icon name="right" size={16} color={colors.muted} />
+							</Pressable>
+						) : (
+							<View style={styles.customRow}>
+								<TextInput
+									autoFocus
+									value={customValue}
+									onChangeText={setCustomValue}
+									placeholder="e.g. glasses"
+									placeholderTextColor={colors.muted}
+									onSubmitEditing={submitCustom}
+									returnKeyType="done"
+									style={[
+										styles.customInput,
+										{ backgroundColor: colors.card, borderColor: colors.accent, color: colors.ink },
+									]}
+								/>
+							</View>
+						)}
+					</Pressable>
 				</Pressable>
-			</Pressable>
+			</KeyboardAvoidingView>
 		</Modal>
 	);
 }

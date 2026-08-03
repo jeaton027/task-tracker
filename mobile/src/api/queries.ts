@@ -4,7 +4,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { calendar, categories, habits, routines, stats, vacations, type TodayScope } from './endpoints';
+import { calendar, categories, habits, integrations, routines, stats, vacations, type TodayScope } from './endpoints';
 import { refreshHomeScreenWidgets } from '../widgets/refresh';
 import type {
 	AggregateStatsResponse,
@@ -12,6 +12,9 @@ import type {
 	HabitLogCreate,
 	HabitStatsResponse,
 	HabitUpdate,
+	IntegrationConfig,
+	IntegrationKeyResponse,
+	IntegrationResponse,
 	MonthlyCalendarResponse,
 	RoutineCreate,
 	RoutineUpdate,
@@ -387,6 +390,70 @@ export function useDeleteVacation() {
 		onSuccess: () => {
 			qc.invalidateQueries({ queryKey: queryKeys.vacations() });
 			qc.invalidateQueries({ queryKey: ['today'] });
+		},
+	});
+}
+
+/** GET /integrations/{habitId} */
+export function useIntegration(habitId: string | null) {
+	return useQuery({
+		queryKey: ['integration', habitId] as const,
+		queryFn: () => integrations.get(habitId!),
+		enabled: habitId != null,
+		staleTime: 1000 * 60,
+	});
+}
+
+/** PUT /integrations/{habitId} */
+export function useSetIntegration() {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: ({ habitId, config }: { habitId: string; config: IntegrationConfig }) =>
+			integrations.set(habitId, config),
+		onSuccess: (_data, { habitId }) => {
+			qc.invalidateQueries({ queryKey: ['integration', habitId] });
+		},
+	});
+}
+
+/** DELETE /integrations/{habitId} */
+export function useRemoveIntegration() {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (habitId: string) => integrations.remove(habitId),
+		onSuccess: (_data, habitId) => {
+			qc.invalidateQueries({ queryKey: ['integration', habitId] });
+		},
+	});
+}
+
+/** GET /integrations/keys/current */
+export function useIntegrationKey() {
+	return useQuery({
+		queryKey: ['integration-key'] as const,
+		queryFn: () => integrations.getCurrentKey(),
+		staleTime: 1000 * 60,
+	});
+}
+
+/** POST /integrations/keys */
+export function useCreateIntegrationKey() {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: () => integrations.createKey(),
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: ['integration-key'] });
+		},
+	});
+}
+
+/** DELETE /integrations/keys */
+export function useRevokeIntegrationKey() {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: () => integrations.revokeKey(),
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: ['integration-key'] });
 		},
 	});
 }

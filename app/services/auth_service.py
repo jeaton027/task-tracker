@@ -18,7 +18,7 @@ from app.core.security import (
 log = logging.getLogger(__name__)
 from app.db.session import get_db
 from app.models.user import User
-from app.repositories import user_repository
+from app.repositories import integration_key_repository, user_repository
 from app.schemas.token import TokenResponse
 from app.services.category_service import seed_defaults as _seed_default_categories
 
@@ -83,27 +83,39 @@ async def get_current_user(
 		credentials: HTTPAuthorizationCredentials = Depends(_bearer),
 		db: AsyncSession = Depends(get_db),
 ) -> User:
-	""" FastAPI dependency. Validates access token and returns user
-	
+	""" FastAPI dependency. Validates access token or integration key and returns user.
+
 	usage in any protected route:
 		async def my_route(current_user: User = Depends(get_current)user)): ...
 	"""
+	token = credentials.credentials
 	exc = HTTPException(
 		status_code=status.HTTP_401_UNAUTHORIZED,
 		detail="Invalid or expired token.",
 		headers={"WWW-Authenticate": "Bearer"},
 	)
+
+	# Integration API keys start with "dbk_"
+	if token.startswith("dbk_"):
+		user_id = await integration_key_repository.get_user_id_by_key(db, token)
+		if not user_id:
+			raise exc
+		user = await user_repository.get_by_id(db, user_id)
+		if not user or not user.is_active:
+			raise exc
+		return user
+
 	try:
-		payload = decode_token(credentials.credentials)
+		payload = decode_token(token)
 		if payload.get("type") != "access":		# reject refresh tkoens used as access tokens
 			raise exc
-		user_id: str | None = payload.get("sub")
-		if not user_id:
+		user_id_str: str | None = payload.get("sub")
+		if not user_id_str:
 			raise exc
 	except JWTError:
 		raise exc
-	
-	user = await user_repository.get_by_id(db, uuid.UUID(user_id))
+
+	user = await user_repository.get_by_id(db, uuid.UUID(user_id_str))
 	if not user or not user.is_active:
 		raise exc
 	return user
@@ -134,8 +146,26 @@ async def forgot_password(db: AsyncSession, email: str) -> None:
 	if not user:
 		return
 	token = _create_reset_token(str(user.id))
-	# TODO: send email with reset link containing this token
-	log.info("Password reset token for %s: %s", email, token)
+
+	from app.core.config import get_settings
+	settings = get_settings()
+	if settings.resend_api_key:
+		import resend
+		resend.api_key = settings.resend_api_key
+		resend.Emails.send({
+			"from": settings.from_email,
+			"to": [email],
+			"subject": "Daybook — Password Reset",
+			"html": (
+				"<p>Here's your password reset code:</p>"
+				f"<h2 style='letter-spacing:2px'>{token}</h2>"
+				"<p>Enter this code in the app to set a new password. "
+				"It expires in 30 minutes.</p>"
+				"<p>If you didn't request this, ignore this email.</p>"
+			),
+		})
+	else:
+		log.info("Password reset token for %s: %s", email, token)
 
 
 async def reset_password(db: AsyncSession, token: str, new_password: str) -> None:

@@ -193,6 +193,42 @@ export const routines = {
 		apiFetch<void>(`/api/v1/routines/${id}`, { method: 'DELETE' }),
 };
 
+// ── Integrations ──────────────────────────────────────────────────────
+
+import type { IntegrationConfig, IntegrationKeyResponse, IntegrationResponse } from './types';
+
+export const integrations = {
+	list: () =>
+		apiFetch<IntegrationResponse[]>('/api/v1/integrations'),
+
+	get: (habitId: string) =>
+		apiFetch<IntegrationResponse | null>(`/api/v1/integrations/${habitId}`),
+
+	set: (habitId: string, config: IntegrationConfig) =>
+		apiFetch<IntegrationResponse>(`/api/v1/integrations/${habitId}`, {
+			method: 'PUT',
+			body: config,
+		}),
+
+	remove: (habitId: string) =>
+		apiFetch<void>(`/api/v1/integrations/${habitId}`, {
+			method: 'DELETE',
+		}),
+
+	getCurrentKey: () =>
+		apiFetch<IntegrationKeyResponse | null>('/api/v1/integrations/keys/current'),
+
+	createKey: () =>
+		apiFetch<IntegrationKeyResponse>('/api/v1/integrations/keys', {
+			method: 'POST',
+		}),
+
+	revokeKey: () =>
+		apiFetch<void>('/api/v1/integrations/keys', {
+			method: 'DELETE',
+		}),
+};
+
 // ── Vacations ──────────────────────────────────────────────────────────
 
 export const vacations = {

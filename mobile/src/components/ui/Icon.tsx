@@ -12,7 +12,7 @@ export type IconName =
 	| 'home' | 'stats' | 'calendar' | 'settings'
 	| 'edit' | 'reorder' | 'trash'
 	| 'close' | 'list' | 'archive' | 'pause'
-	| 'play' | 'skip' | 'restart';
+	| 'play' | 'skip' | 'restart' | 'grid' | 'link';
 
 interface IconProps {
 	name: IconName;
@@ -127,6 +127,18 @@ function renderIcon(name: IconName) {
 			return (<>
 				<Path d="M1 4v6h6" />
 				<Path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+			</>);
+		case 'grid':
+			return (<>
+				<Rect x="3" y="3" width="7" height="7" rx="1" />
+				<Rect x="14" y="3" width="7" height="7" rx="1" />
+				<Rect x="3" y="14" width="7" height="7" rx="1" />
+				<Rect x="14" y="14" width="7" height="7" rx="1" />
+			</>);
+		case 'link':
+			return (<>
+				<Path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+				<Path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
 			</>);
 	}
 }

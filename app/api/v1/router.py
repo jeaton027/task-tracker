@@ -5,6 +5,7 @@ from app.api.v1.calendar import router as calendar_router
 from app.api.v1.categories import router as categories_router
 from app.api.v1.habits import router as habits_router
 from app.api.v1.health import router as health_router
+from app.api.v1.integrations import router as integrations_router
 from app.api.v1.routines import router as routines_router
 from app.api.v1.stats import router as stats_router
 from app.api.v1.tags import router as tags_router
@@ -20,3 +21,4 @@ router.include_router(routines_router)
 router.include_router(vacations_router)
 router.include_router(calendar_router)
 router.include_router(stats_router)
+router.include_router(integrations_router)

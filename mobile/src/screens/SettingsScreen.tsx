@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
 	Alert,
+	KeyboardAvoidingView,
 	Modal,
+	Platform,
 	Pressable,
 	ScrollView,
 	StyleSheet,
@@ -20,12 +22,16 @@ import {
 	useDeleteCategory,
 	useDeleteRoutine,
 	useDeleteVacation,
+	useCreateIntegrationKey,
+	useIntegrationKey,
+	useRevokeIntegrationKey,
 	useRoutine,
 	useRoutines,
 	useUpdateCategory,
 	useUpdateRoutine,
 	useVacations,
 } from '../api/queries';
+import { API_BASE_URL } from '../config';
 import { useAuth } from '../auth/AuthProvider';
 import { BottomNav, type NavTab } from '../components/today/BottomNav';
 import { Icon, type IconName } from '../components/ui/Icon';
@@ -65,6 +71,7 @@ export function SettingsScreen({ onNavigate }: { onNavigate?: (tab: NavTab) => v
 	const [categoriesOpen, setCategoriesOpen] = useState(false);
 	const [routinesOpen, setRoutinesOpen]     = useState(false);
 	const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+	const [repcueModalOpen, setRepcueModalOpen] = useState(false);
 
 	const todayStr = isoDate(new Date());
 	const activeVacation = (vacationsQ.data ?? []).find(
@@ -146,6 +153,19 @@ export function SettingsScreen({ onNavigate }: { onNavigate?: (tab: NavTab) => v
 				<View style={[styles.rowDivider, { backgroundColor: colors.line }]} />
 				<Row icon="reorder" label="Manage Routines" colors={colors}
 					onPress={() => setRoutinesOpen(true)} />
+				<View style={[styles.rowDivider, { backgroundColor: colors.line }]} />
+				<Row icon="grid" label="Widgets" colors={colors}
+					onPress={() => Alert.alert(
+						'Widgets',
+						'To add or configure widgets, long-press your home screen and select "Widgets", then find Daybook in the list.',
+					)} />
+			</View>
+
+			{/* ── Integrations ────────────────────────────── */}
+			<GroupHeader label="Integrations" colors={colors} />
+			<View style={[styles.group, { backgroundColor: colors.card, borderColor: colors.line }]}>
+				<Row icon="link" label="RepCue Connection" colors={colors}
+					onPress={() => setRepcueModalOpen(true)} />
 			</View>
 
 			{/* ── Appearance ───────────────────────────────── */}
@@ -183,10 +203,6 @@ export function SettingsScreen({ onNavigate }: { onNavigate?: (tab: NavTab) => v
 			{/* ── Account ──────────────────────────────────── */}
 			<GroupHeader label="Account" colors={colors} />
 			<View style={[styles.group, { backgroundColor: colors.card, borderColor: colors.line }]}>
-				<Row icon="edit" label="Edit Profile" colors={colors} onPress={() => {
-					// TODO: navigate to edit profile screen
-				}} />
-				<View style={[styles.rowDivider, { backgroundColor: colors.line }]} />
 				<Row icon="edit" label="Change Password" colors={colors} onPress={() => setChangePasswordOpen(true)} />
 				<View style={[styles.rowDivider, { backgroundColor: colors.line }]} />
 				<Row icon="right" label="Log Out" colors={colors} onPress={confirmLogout} />
@@ -225,6 +241,10 @@ export function SettingsScreen({ onNavigate }: { onNavigate?: (tab: NavTab) => v
 			<ChangePasswordModal
 				visible={changePasswordOpen}
 				onClose={() => setChangePasswordOpen(false)}
+			/>
+			<RepCueConnectionModal
+				visible={repcueModalOpen}
+				onClose={() => setRepcueModalOpen(false)}
 			/>
 		</ScrollView>
 	);
@@ -480,56 +500,62 @@ function RoutineListView({
 				</Pressable>
 			</View>
 
-			<ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent}>
-				{creating && (
-					<View style={[styles.manageRow, { borderBottomColor: colors.line }]}>
-						<TextInput
-							autoFocus
-							value={newName}
-							onChangeText={setNewName}
-							onSubmitEditing={submitCreate}
-							onBlur={submitCreate}
-							placeholder="New routine name"
-							placeholderTextColor={colors.muted}
-							returnKeyType="done"
-							style={[styles.editInput, {
-								color: colors.ink,
-								borderColor: colors.accent,
-								backgroundColor: colors.card,
-							}]}
-						/>
-					</View>
-				)}
+			<KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+				<ScrollView
+					style={styles.modalScroll}
+					contentContainerStyle={styles.modalContent}
+					keyboardShouldPersistTaps="handled"
+				>
+					{creating && (
+						<View style={[styles.manageRow, { borderBottomColor: colors.line }]}>
+							<TextInput
+								autoFocus
+								value={newName}
+								onChangeText={setNewName}
+								onSubmitEditing={submitCreate}
+								onBlur={submitCreate}
+								placeholder="New routine name"
+								placeholderTextColor={colors.muted}
+								returnKeyType="done"
+								style={[styles.editInput, {
+									color: colors.ink,
+									borderColor: colors.accent,
+									backgroundColor: colors.card,
+								}]}
+							/>
+						</View>
+					)}
 
-				{items.length === 0 && !creating ? (
-					<Text style={[styles.emptyHint, { color: colors.muted }]}>
-						No routines yet. Tap + to create one.
-					</Text>
-				) : (
-					items.map((r) => (
-						<Pressable
-							key={r.id}
-							style={[styles.manageRow, { borderBottomColor: colors.line }]}
-							onPress={() => onSelect(r.id)}
-						>
-							<View style={styles.manageLabel}>
-								<Text style={[styles.rowLabel, { color: colors.ink }]}>
-									{r.name}
-								</Text>
-								<Text style={[styles.tapHint, { color: colors.muted }]}>
-									{r.frequency.toLowerCase()} · {r.habits?.length ?? 0} habits
-								</Text>
-							</View>
+					{items.length === 0 && !creating ? (
+						<Text style={[styles.emptyHint, { color: colors.muted }]}>
+							No routines yet. Tap + to create one.
+						</Text>
+					) : (
+						items.map((r) => (
 							<Pressable
-								hitSlop={8}
-								onPress={(e) => { e.stopPropagation(); confirmDelete(r.id, r.name); }}
+								key={r.id}
+								style={[styles.manageRow, { borderBottomColor: colors.line }]}
+								onPress={() => onSelect(r.id)}
 							>
-								<Icon name="trash" size={18} color={colors.muted} />
+								<View style={styles.manageLabel}>
+									<Text style={[styles.rowLabel, { color: colors.ink }]}>
+										{r.name}
+									</Text>
+									<Text style={[styles.tapHint, { color: colors.muted }]}>
+										{r.frequency.toLowerCase()} · {r.habits?.length ?? 0} habits
+									</Text>
+								</View>
+								<Pressable
+									hitSlop={8}
+									onPress={(e) => { e.stopPropagation(); confirmDelete(r.id, r.name); }}
+								>
+									<Icon name="trash" size={18} color={colors.muted} />
+								</Pressable>
 							</Pressable>
-						</Pressable>
-					))
-				)}
-			</ScrollView>
+						))
+					)}
+				</ScrollView>
+			</KeyboardAvoidingView>
 			<BottomNav active="Settings" onTabChange={(tab) => onNavigate?.(tab)} />
 		</SafeAreaView>
 	);
@@ -1145,6 +1171,250 @@ function ChangePasswordModal({
 	);
 }
 
+// ── RepCue Connection Modal ────────────────────────────────────────────
+
+function RepCueConnectionModal({
+	visible, onClose,
+}: {
+	visible: boolean; onClose: () => void;
+}) {
+	const { colors } = useTheme();
+	const keyQ = useIntegrationKey();
+	const createKey = useCreateIntegrationKey();
+	const revokeKey = useRevokeIntegrationKey();
+	const [newKey, setNewKey] = useState<string | null>(null);
+
+	const existingKey = keyQ.data;
+
+	const handleGenerate = useCallback(() => {
+		const verb = existingKey ? 'regenerate' : 'generate';
+		Alert.alert(
+			`${existingKey ? 'Regenerate' : 'Generate'} API Key`,
+			existingKey
+				? 'This will revoke your current key. RepCue will need the new key to keep syncing.'
+				: 'This creates a permanent API key for RepCue to send workout data to Daybook.',
+			[
+				{ text: 'Cancel', style: 'cancel' },
+				{
+					text: existingKey ? 'Regenerate' : 'Generate',
+					onPress: () => {
+						createKey.mutate(undefined, {
+							onSuccess: (data) => {
+								if (data.key) setNewKey(data.key);
+							},
+						});
+					},
+				},
+			],
+		);
+	}, [existingKey, createKey]);
+
+	const handleRevoke = useCallback(() => {
+		Alert.alert(
+			'Revoke API Key',
+			'RepCue will no longer be able to send workout data to Daybook.',
+			[
+				{ text: 'Cancel', style: 'cancel' },
+				{
+					text: 'Revoke',
+					style: 'destructive',
+					onPress: () => {
+						revokeKey.mutate();
+						setNewKey(null);
+					},
+				},
+			],
+		);
+	}, [revokeKey]);
+
+	const showCopyable = useCallback((label: string, text: string) => {
+		Alert.alert(label, text);
+	}, []);
+
+	return (
+		<Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+			<SafeAreaView style={[styles.root, { backgroundColor: colors.paper }]} edges={['top']}>
+				<View style={[rcStyles.header, { borderBottomColor: colors.line }]}>
+					<Text style={[rcStyles.title, { color: colors.ink }]}>RepCue Connection</Text>
+					<Pressable onPress={onClose} hitSlop={12}>
+						<Text style={[rcStyles.doneBtn, { color: colors.accent }]}>Done</Text>
+					</Pressable>
+				</View>
+
+				<ScrollView style={{ flex: 1 }} contentContainerStyle={rcStyles.body}>
+					<Text style={[rcStyles.intro, { color: colors.muted }]}>
+						Enter these details in RepCue's settings to connect workout completions to Daybook habits.
+					</Text>
+
+					{/* API URL */}
+					<Text style={[rcStyles.fieldLabel, { color: colors.muted }]}>API URL</Text>
+					<Pressable
+						style={[rcStyles.fieldBox, { backgroundColor: colors.chip, borderColor: colors.line }]}
+						onPress={() => showCopyable('API URL', API_BASE_URL)}
+					>
+						<Text style={[rcStyles.fieldValue, { color: colors.ink }]} numberOfLines={1}>
+							{API_BASE_URL}
+						</Text>
+						<Text style={[rcStyles.copyHint, { color: colors.muted }]}>
+							Tap to view
+						</Text>
+					</Pressable>
+
+					{/* API Key */}
+					<Text style={[rcStyles.fieldLabel, { color: colors.muted }]}>API Key</Text>
+
+					{newKey ? (
+						<>
+							<Pressable
+								style={[rcStyles.fieldBox, { backgroundColor: colors.chip, borderColor: colors.line }]}
+								onPress={() => showCopyable('API Key', newKey)}
+							>
+								<Text style={[rcStyles.fieldValue, { color: colors.ink }]} numberOfLines={1}>
+									{newKey.slice(0, 24)}…
+								</Text>
+								<Text style={[rcStyles.copyHint, { color: colors.accent }]}>
+									Tap to view full key
+								</Text>
+							</Pressable>
+							<Text style={[rcStyles.note, { color: colors.muted }]}>
+								Save this key now — it won't be shown again.
+							</Text>
+						</>
+					) : existingKey ? (
+						<>
+							<View style={[rcStyles.fieldBox, { backgroundColor: colors.chip, borderColor: colors.line }]}>
+								<Text style={[rcStyles.fieldValue, { color: colors.ink }]}>
+									Key active since {new Date(existingKey.created_at).toLocaleDateString()}
+								</Text>
+							</View>
+							<View style={rcStyles.keyActions}>
+								<Pressable
+									style={[rcStyles.actionBtn, { borderColor: colors.line }]}
+									onPress={handleGenerate}
+								>
+									<Text style={[rcStyles.actionBtnText, { color: colors.ink }]}>
+										Regenerate
+									</Text>
+								</Pressable>
+								<Pressable
+									style={[rcStyles.actionBtn, { borderColor: colors.line }]}
+									onPress={handleRevoke}
+								>
+									<Text style={[rcStyles.actionBtnText, { color: '#D94040' }]}>
+										Revoke
+									</Text>
+								</Pressable>
+							</View>
+						</>
+					) : (
+						<>
+							<Pressable
+								style={[rcStyles.generateBtn, { backgroundColor: colors.accent }]}
+								onPress={handleGenerate}
+							>
+								<Text style={[rcStyles.generateBtnText, { color: '#fff' }]}>
+									Generate API Key
+								</Text>
+							</Pressable>
+							<Text style={[rcStyles.note, { color: colors.muted }]}>
+								This key does not expire. You only need to set it up once.
+							</Text>
+						</>
+					)}
+				</ScrollView>
+			</SafeAreaView>
+		</Modal>
+	);
+}
+
+const rcStyles = StyleSheet.create({
+	header: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'center',
+		paddingHorizontal: 18,
+		paddingVertical: 14,
+		borderBottomWidth: 1,
+	},
+	title: {
+		fontFamily: FONTS.display.semibold,
+		fontSize: 17,
+	},
+	doneBtn: {
+		fontFamily: FONTS.display.regular,
+		fontSize: 15,
+	},
+	body: {
+		padding: 18,
+	},
+	intro: {
+		fontFamily: FONTS.body.regular,
+		fontSize: 14,
+		lineHeight: 20,
+		marginBottom: 24,
+	},
+	fieldLabel: {
+		fontFamily: FONTS.body.semibold,
+		fontSize: 11,
+		textTransform: 'uppercase',
+		letterSpacing: 1,
+		marginBottom: 6,
+	},
+	fieldBox: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'center',
+		paddingHorizontal: 14,
+		paddingVertical: 12,
+		borderRadius: RADII.default,
+		borderWidth: 1,
+		marginBottom: 20,
+	},
+	fieldValue: {
+		fontFamily: FONTS.body.regular,
+		fontSize: 14,
+		flex: 1,
+		marginRight: 8,
+	},
+	copyHint: {
+		fontFamily: FONTS.body.regular,
+		fontSize: 12,
+	},
+	note: {
+		fontFamily: FONTS.body.regular,
+		fontSize: 12,
+		lineHeight: 17,
+		marginTop: 4,
+	},
+	keyActions: {
+		flexDirection: 'row',
+		gap: 10,
+		marginTop: -8,
+		marginBottom: 12,
+	},
+	actionBtn: {
+		flex: 1,
+		alignItems: 'center',
+		paddingVertical: 10,
+		borderRadius: RADII.default,
+		borderWidth: 1,
+	},
+	actionBtnText: {
+		fontFamily: FONTS.display.regular,
+		fontSize: 14,
+	},
+	generateBtn: {
+		alignItems: 'center',
+		paddingVertical: 12,
+		borderRadius: RADII.default,
+		marginBottom: 8,
+	},
+	generateBtnText: {
+		fontFamily: FONTS.display.semibold,
+		fontSize: 14,
+	},
+});
+
 // ── Shared subcomponents ───────────────────────────────────────────────
 
 function GroupHeader({ label, colors }: { label: string; colors: any }) {
@@ -1315,8 +1585,8 @@ const styles = StyleSheet.create({
 	manageLabel: { flex: 1 },
 	editInput: {
 		flex: 1,
-		height: 36,
 		paddingHorizontal: 10,
+		paddingVertical: 8,
 		borderRadius: RADII.default,
 		borderWidth: 1,
 		fontFamily: FONTS.body.regular,

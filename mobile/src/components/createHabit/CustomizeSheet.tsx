@@ -19,6 +19,7 @@ import {
 	Text,
 	View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FONTS, RADII, useTheme } from '../../theme';
 import { Radio } from './Radio';
@@ -47,6 +48,7 @@ export function CustomizeSheet({
 	visible, initialInterval, onClose, onDone,
 }: CustomizeSheetProps) {
 	const { colors } = useTheme();
+	const insets = useSafeAreaInsets();
 	const [tab, setTab] = useState<CadenceTab>('Day');
 	const [dayOption, setDayOption] = useState<DayOption>(
 		initialInterval ? 'every-n' : 'everyday',
@@ -70,7 +72,7 @@ export function CustomizeSheet({
 		<Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
 			<Pressable style={styles.backdrop} onPress={onClose}>
 				<Pressable
-					style={[styles.sheet, { backgroundColor: colors.paper }]}
+					style={[styles.sheet, { backgroundColor: colors.paper, paddingBottom: Math.max(28, insets.bottom + 12) }]}
 					onPress={(e) => e.stopPropagation()}
 				>
 					<View style={styles.header}>

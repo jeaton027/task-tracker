@@ -36,6 +36,7 @@ import { EditHabitScreen } from './EditHabitScreen';
 import { HabitDetailScreen } from './HabitDetailScreen';
 import { RoutineScreen } from './RoutineScreen';
 import { SettingsScreen } from './SettingsScreen';
+import { CalendarScreen } from './CalendarScreen';
 import { StatsScreen } from './StatsScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FONTS, useTheme } from '../theme';
@@ -220,6 +221,8 @@ export function TodayScreen() {
 				<SettingsScreen onNavigate={setNavTab} />
 			) : navTab === 'Stats' ? (
 				<StatsScreen />
+			) : navTab === 'Calendar' ? (
+				<CalendarScreen />
 			) : (
 			<>
 			<AppHeader onMenuPress={() => setDrawerOpen(true)} />

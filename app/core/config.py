@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = Field(default=15, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
     refresh_token_expire_minutes: int = Field(default=10080, alias="REFRESH_TOKEN_EXPIRE_MINUTES")
     cors_origins: str = Field(default="", alias="CORS_ORIGINS")
+    resend_api_key: str = Field(default="", alias="RESEND_API_KEY")
+    from_email: str = Field(default="onboarding@resend.dev", alias="FROM_EMAIL")
 
     @property
     def cors_origin_list(self) -> list[str]:
