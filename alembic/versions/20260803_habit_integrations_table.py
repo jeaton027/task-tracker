@@ -6,7 +6,7 @@ Create Date: 2026-08-03
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, ENUM, UUID
 
 revision = "d6e7f8a9b0c1"
 down_revision = "c5f3g9b20d43"
@@ -21,7 +21,7 @@ def upgrade() -> None:
         sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("habit_id", UUID(as_uuid=True), sa.ForeignKey("habits.id", ondelete="CASCADE"), nullable=False, unique=True, index=True),
         sa.Column("source", sa.String(50), nullable=False, server_default="repcue"),
-        sa.Column("match_mode", sa.Enum("ANY", "SPECIFIC", name="integration_match_mode", create_type=False), nullable=False, server_default="ANY"),
+        sa.Column("match_mode", ENUM("ANY", "SPECIFIC", name="integration_match_mode", create_type=False), nullable=False, server_default="ANY"),
         sa.Column("workout_ids", ARRAY(sa.String), nullable=False, server_default="{}"),
         sa.Column("category_ids", ARRAY(sa.String), nullable=False, server_default="{}"),
         sa.Column("collection_ids", ARRAY(sa.String), nullable=False, server_default="{}"),
