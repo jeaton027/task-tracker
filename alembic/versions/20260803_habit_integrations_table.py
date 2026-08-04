@@ -15,7 +15,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("CREATE TYPE integration_match_mode AS ENUM ('ANY', 'SPECIFIC')")
+    op.execute("DO $$ BEGIN CREATE TYPE integration_match_mode AS ENUM ('ANY', 'SPECIFIC'); EXCEPTION WHEN duplicate_object THEN NULL; END $$")
     op.create_table(
         "habit_integrations",
         sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
