@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ApiError } from '../api/client';
 import { auth } from '../api/endpoints';
 import { useAuth } from '../auth/AuthProvider';
+import { Icon } from '../components/ui/Icon';
 import { FONTS, RADII, useTheme } from '../theme';
 
 type Mode = 'signin' | 'register' | 'forgot' | 'reset';
@@ -26,6 +27,7 @@ export function LoginScreen() {
 	const [password, setPassword] = useState('');
 	const [resetToken, setResetToken] = useState('');
 	const [confirmPw, setConfirmPw] = useState('');
+	const [showPassword, setShowPassword] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [message, setMessage] = useState<string | null>(null);
@@ -143,20 +145,26 @@ export function LoginScreen() {
 					)}
 
 					{(mode === 'signin' || mode === 'register' || mode === 'reset') && (
-						<TextInput
-							style={[
-								styles.input,
-								{ backgroundColor: colors.card, borderColor: colors.line, color: colors.ink },
-							]}
-							placeholder={mode === 'reset' ? 'New password' : 'Password'}
-							placeholderTextColor={colors.muted}
-							autoCapitalize="none"
-							autoComplete={isRegister ? 'new-password' : 'current-password'}
-							secureTextEntry
-							value={password}
-							onChangeText={setPassword}
-							editable={!submitting}
-						/>
+						<View style={[
+							styles.input,
+							styles.passwordRow,
+							{ backgroundColor: colors.card, borderColor: colors.line },
+						]}>
+							<TextInput
+								style={[styles.passwordInput, { color: colors.ink }]}
+								placeholder={mode === 'reset' ? 'New password' : 'Password'}
+								placeholderTextColor={colors.muted}
+								autoCapitalize="none"
+								autoComplete={isRegister ? 'new-password' : 'current-password'}
+								secureTextEntry={!showPassword}
+								value={password}
+								onChangeText={setPassword}
+								editable={!submitting}
+							/>
+							<Pressable onPress={() => setShowPassword((p) => !p)} hitSlop={8}>
+								<Icon name={showPassword ? 'eye-off' : 'eye'} size={20} color={colors.muted} />
+							</Pressable>
+						</View>
 					)}
 
 					{mode === 'reset' && (
@@ -273,6 +281,16 @@ const styles = StyleSheet.create({
 		paddingVertical: 12,
 		fontFamily: FONTS.body.regular,
 		fontSize: 15,
+	},
+	passwordRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+	},
+	passwordInput: {
+		flex: 1,
+		fontFamily: FONTS.body.regular,
+		fontSize: 15,
+		padding: 0,
 	},
 	error: {
 		fontFamily: FONTS.body.regular,

@@ -18,7 +18,7 @@ import {
 	type YearHeatmapData,
 } from '../api/adapter';
 import { ApiError } from '../api/client';
-import { useCategories, useDeleteHabit, useLogHabit, useRoutines, useToday, useWeeklyCalendar, useYearlyCalendar } from '../api/queries';
+import { useCategories, useDeleteHabit, useLogHabit, useRoutines, useStatsOverview, useToday, useWeeklyCalendar, useYearlyCalendar } from '../api/queries';
 import { useAuth } from '../auth/AuthProvider';
 import { AppHeader } from '../components/today/AppHeader';
 import { BottomNav, type NavTab } from '../components/today/BottomNav';
@@ -117,6 +117,7 @@ export function TodayScreen() {
 	const categoriesQ = useCategories();
 	const logHabit = useLogHabit();
 	const deleteHabit = useDeleteHabit();
+	const overviewQ = useStatsOverview();
 
 	const weekDate = view === 'Week' ? weekStartDate(viewingDate) : undefined;
 	const weekQ = useWeeklyCalendar(weekDate);
@@ -155,10 +156,26 @@ export function TodayScreen() {
 		Year:  new Set(['daily', 'weekly', 'monthly', 'yearly', 'interval']),
 	};
 
+	const streakMap = useMemo<Map<string, number>>(() => {
+		const map = new Map<string, number>();
+		const allHabits = [
+			...(overviewQ.data?.habits ?? []),
+			...(overviewQ.data?.avoid_habits ?? []),
+		];
+		for (const h of allHabits) {
+			map.set(h.id, h.current_streak);
+		}
+		return map;
+	}, [overviewQ.data]);
+
 	const sections = SECTION_DEFS
 		.filter((def) => VISIBLE_SECTIONS[view].has(def.key))
 		.map((def) => {
-			let habits = (data?.[def.key as SectionKey]?.habits ?? []).map(toHabitView);
+			let habits = (data?.[def.key as SectionKey]?.habits ?? []).map((h) => {
+				const view = toHabitView(h);
+				view.streak = streakMap.get(view.id) ?? 0;
+				return view;
+			});
 			if (filters.timeOfDay) {
 				habits = habits.filter((h) => h.section === filters.timeOfDay);
 			}

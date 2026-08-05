@@ -50,7 +50,11 @@ def _next_month_first(d: date) -> date:
 	return date(d.year + 1, 1, 1) if d.month == 12 else date(d.year, d.month + 1, 1)
 
 
-def _enumerate_periods(habit: Habit, end_date: date) -> list[date]:
+def _enumerate_periods(
+	habit: Habit,
+	end_date: date,
+	override_start: date | None = None,
+) -> list[date]:
 	"""All period-start dates from habit.start_date up to end_date (inclusive).
 
 	The "period start" is the canonical anchor for the period (Monday for week,
@@ -59,7 +63,7 @@ def _enumerate_periods(habit: Habit, end_date: date) -> list[date]:
 
 	CUSTOM habits return [] — no scheduling logic defined.
 	"""
-	start = habit.start_date
+	start = override_start if override_start is not None else habit.start_date
 	end = end_date
 	if habit.end_date:
 		end = min(end, habit.end_date)
@@ -437,8 +441,9 @@ def _habit_completion_rate(
 	range_end: date,
 	today: date,
 	vacation_dates: frozenset[date],
+	override_start: date | None = None,
 ) -> float | None:
-	all_periods = _enumerate_periods(habit, min(range_end, today))
+	all_periods = _enumerate_periods(habit, min(range_end, today), override_start=override_start)
 	all_periods = [p for p in all_periods if p >= range_start]
 	if not all_periods:
 		return None
@@ -494,10 +499,12 @@ async def get_aggregate_stats(
 		age_days = (today - habit.start_date).days
 		is_young = age_days < MIN_AGE_DAYS
 
+		effective_start = min(min(habit_logs.keys()), habit.start_date) if habit_logs else habit.start_date
 		rate = None if is_young else _habit_completion_rate(
 			habit, habit_logs, range_start, range_end, today, vacation_dates,
+			override_start=effective_start,
 		)
-		habit_periods = _enumerate_periods(habit, today)
+		habit_periods = _enumerate_periods(habit, today, override_start=effective_start)
 		streak = _current_streak(
 			habit, habit_periods, habit_logs, today, vacation_dates,
 		).length
@@ -657,16 +664,17 @@ async def get_habit_stats(
 			records=RecordSet(),
 		)
 
-	# Single bulk fetch — all logs from start_date to today
+	# Fetch all logs — use date(2000, 1, 1) to catch backfilled entries before start_date
 	logs = await habit_log_repository.get_by_habit_ids_and_date_range(
-		db, [habit.id], habit.start_date, today,
+		db, [habit.id], date(2000, 1, 1), today,
 	)
 	# Group by log_date for fast period lookups
 	logs_by_date: dict[date, float] = defaultdict(float)
 	for log in logs:
 		logs_by_date[log.log_date] += log.amount
 
-	all_periods = _enumerate_periods(habit, today)
+	effective_start = min(min(logs_by_date.keys()), habit.start_date) if logs_by_date else habit.start_date
+	all_periods = _enumerate_periods(habit, today, override_start=effective_start)
 	vacation_dates = await vacation_service.get_user_vacation_dates(db, user_id)
 
 	return HabitStatsResponse(

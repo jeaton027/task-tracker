@@ -151,9 +151,11 @@ export function useLogHabit() {
 		},
 
 		// Always refetch at the end to make sure we converge with the server
-		onSettled: () => {
+		onSettled: (_data, _err, { habitId }) => {
 			qc.invalidateQueries({ queryKey: ['today'] });
 			qc.invalidateQueries({ queryKey: ['calendar'] });
+			qc.invalidateQueries({ queryKey: ['habit', habitId, 'stats'] });
+			qc.invalidateQueries({ queryKey: ['stats'] });
 			refreshHomeScreenWidgets();
 		},
 	});
@@ -178,9 +180,11 @@ export function useUnlogHabit() {
 	return useMutation({
 		mutationFn: ({ habitId, date }: { habitId: string; date?: string }) =>
 			habits.unlog(habitId, date),
-		onSuccess: () => {
+		onSuccess: (_data, { habitId }) => {
 			qc.invalidateQueries({ queryKey: ['today'] });
 			qc.invalidateQueries({ queryKey: ['calendar'] });
+			qc.invalidateQueries({ queryKey: ['habit', habitId, 'stats'] });
+			qc.invalidateQueries({ queryKey: ['stats'] });
 			refreshHomeScreenWidgets();
 		},
 	});

@@ -1,3 +1,4 @@
+import * as Clipboard from 'expo-clipboard';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
 	Alert,
@@ -1183,6 +1184,7 @@ function RepCueConnectionModal({
 	const createKey = useCreateIntegrationKey();
 	const revokeKey = useRevokeIntegrationKey();
 	const [newKey, setNewKey] = useState<string | null>(null);
+	const [copied, setCopied] = useState<string | null>(null);
 
 	const existingKey = keyQ.data;
 
@@ -1227,8 +1229,11 @@ function RepCueConnectionModal({
 		);
 	}, [revokeKey]);
 
-	const showCopyable = useCallback((label: string, text: string) => {
-		Alert.alert(label, text);
+	const copyToClipboard = useCallback((label: string, text: string) => {
+		Clipboard.setStringAsync(text).then(() => {
+			setCopied(label);
+			setTimeout(() => setCopied(null), 2000);
+		});
 	}, []);
 
 	return (
@@ -1250,13 +1255,13 @@ function RepCueConnectionModal({
 					<Text style={[rcStyles.fieldLabel, { color: colors.muted }]}>API URL</Text>
 					<Pressable
 						style={[rcStyles.fieldBox, { backgroundColor: colors.chip, borderColor: colors.line }]}
-						onPress={() => showCopyable('API URL', API_BASE_URL)}
+						onPress={() => copyToClipboard('url', API_BASE_URL)}
 					>
 						<Text style={[rcStyles.fieldValue, { color: colors.ink }]} numberOfLines={1}>
 							{API_BASE_URL}
 						</Text>
-						<Text style={[rcStyles.copyHint, { color: colors.muted }]}>
-							Tap to view
+						<Text style={[rcStyles.copyHint, { color: copied === 'url' ? colors.accent : colors.muted }]}>
+							{copied === 'url' ? 'Copied!' : 'Tap to copy'}
 						</Text>
 					</Pressable>
 
@@ -1267,13 +1272,13 @@ function RepCueConnectionModal({
 						<>
 							<Pressable
 								style={[rcStyles.fieldBox, { backgroundColor: colors.chip, borderColor: colors.line }]}
-								onPress={() => showCopyable('API Key', newKey)}
+								onPress={() => copyToClipboard('key', newKey)}
 							>
 								<Text style={[rcStyles.fieldValue, { color: colors.ink }]} numberOfLines={1}>
 									{newKey.slice(0, 24)}…
 								</Text>
-								<Text style={[rcStyles.copyHint, { color: colors.accent }]}>
-									Tap to view full key
+								<Text style={[rcStyles.copyHint, { color: copied === 'key' ? colors.accent : colors.muted }]}>
+									{copied === 'key' ? 'Copied!' : 'Tap to copy'}
 								</Text>
 							</Pressable>
 							<Text style={[rcStyles.note, { color: colors.muted }]}>

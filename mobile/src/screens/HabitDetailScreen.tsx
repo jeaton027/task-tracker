@@ -767,9 +767,7 @@ function DayCell({
 	const hasFill = ratio > 0;
 
 	let bg = 'transparent';
-	if (selected) {
-		bg = color;
-	} else if (hasFill) {
+	if (hasFill) {
 		const intensity = 0.12 + ratio * 0.35;
 		bg = mixColors(color, colors.paper, intensity);
 	}
@@ -783,7 +781,7 @@ function DayCell({
 					styles.calCell,
 					{
 						backgroundColor: bg,
-						borderWidth: isToday && !selected ? 1.5 : 0,
+						borderWidth: isToday ? 1.5 : 0,
 						borderColor: isToday ? color : 'transparent',
 						opacity: isFuture ? 0.3 : 1,
 					},
@@ -793,7 +791,7 @@ function DayCell({
 					style={[
 						styles.calCellText,
 						{
-							color: selected ? '#fff' : colors.ink,
+							color: colors.ink,
 							fontFamily: isToday ? FONTS.display.semibold : FONTS.display.regular,
 						},
 					]}
@@ -801,6 +799,9 @@ function DayCell({
 					{dayNum}
 				</Text>
 			</Pressable>
+			{selected && (
+				<View style={[styles.selectedBar, { backgroundColor: color }]} />
+			)}
 		</View>
 	);
 }
@@ -972,6 +973,12 @@ const styles = StyleSheet.create({
 	},
 	calCellText: {
 		fontSize: 14,
+	},
+	selectedBar: {
+		height: 3,
+		borderRadius: 1.5,
+		marginHorizontal: 6,
+		marginTop: 2,
 	},
 
 	// Control bar
