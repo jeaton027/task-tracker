@@ -68,13 +68,14 @@ def _day_cell(
 
 	Precedence:
 	  1. day in vacation -> VACATION  (display override; amount still shown)
-	  2. habit not due that day -> NOT_SCHEDULED
+	  2. habit not due that day AND no logged data -> NOT_SCHEDULED
 	  3. otherwise -> compute_status against the period total
 	"""
 	day_amount = daily.get((habit.id, day), 0.0)
 	if day in vacation_dates:
 		return CalendarDay(date=day, status=HabitStatus.VACATION, amount=day_amount)
-	if not is_due_on(habit, day):
+	has_data = day_amount > 0
+	if not is_due_on(habit, day) and not has_data:
 		return CalendarDay(date=day, status=HabitStatus.NOT_SCHEDULED, amount=day_amount)
 	ps, pe = period_bounds(habit, day)
 	total = _period_total(daily, habit.id, ps, pe)
