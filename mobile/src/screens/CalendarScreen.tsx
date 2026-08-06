@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
 	ActivityIndicator,
+	Modal,
 	Pressable,
 	ScrollView,
 	StyleSheet,
@@ -9,7 +10,7 @@ import {
 } from 'react-native';
 import { useQueries } from '@tanstack/react-query';
 
-import { useAllHabits, useWeeklyCalendar } from '../api/queries';
+import { useAllHabits, useCategories, useWeeklyCalendar } from '../api/queries';
 import { calendar } from '../api/endpoints';
 import type {
 	CalendarDay,
@@ -18,6 +19,7 @@ import type {
 	MonthlyCalendarResponse,
 	WeeklyCalendarItem,
 } from '../api/types';
+import { Icon } from '../components/ui/Icon';
 import { FONTS, RADII, useTheme } from '../theme';
 import {
 	isoDate,
@@ -32,10 +34,11 @@ import {
 
 type CalView = 'Week' | 'Month';
 
-const SECTIONS: { key: HabitSection; label: string }[] = [
+const SECTIONS: { key: HabitSection | 'ANYTIME'; label: string }[] = [
 	{ key: 'MORNING',   label: 'Morning' },
 	{ key: 'AFTERNOON', label: 'Day' },
 	{ key: 'EVENING',   label: 'Evening' },
+	{ key: 'ANYTIME',   label: 'Anytime' },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -73,8 +76,56 @@ export function CalendarScreen() {
 	const { colors, paletteMap: hexMap } = useTheme();
 	const [calView, setCalView] = useState<CalView>('Week');
 	const [anchor, setAnchor] = useState(new Date());
+	const [filterOpen, setFilterOpen] = useState(false);
+	const [selectedHabitIds, setSelectedHabitIds] = useState<Set<string> | null>(null);
 
 	const todayStr = isoDate(new Date());
+
+	// ── Data ────────────────────────────────────────────────────────────
+	const { data: allHabits } = useAllHabits();
+	const { data: categoriesData } = useCategories();
+
+	const activeHabits = useMemo(
+		() => (allHabits ?? []).filter((h) => h.is_active),
+		[allHabits],
+	);
+
+	// Default: all habits selected
+	const visibleIds = selectedHabitIds ?? new Set(activeHabits.map((h) => h.id));
+
+	// ── Filter callbacks ───────────────────────────────────────────────
+	const toggleHabit = useCallback((id: string) => {
+		setSelectedHabitIds((prev) => {
+			const base = prev ?? new Set(activeHabits.map((h) => h.id));
+			const next = new Set(base);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+	}, [activeHabits]);
+
+	const toggleCategory = useCallback((categoryId: string) => {
+		setSelectedHabitIds((prev) => {
+			const base = prev ?? new Set(activeHabits.map((h) => h.id));
+			const catHabitIds = activeHabits.filter((h) => h.category_id === categoryId).map((h) => h.id);
+			const allSelected = catHabitIds.every((id) => base.has(id));
+			const next = new Set(base);
+			if (allSelected) {
+				for (const id of catHabitIds) next.delete(id);
+			} else {
+				for (const id of catHabitIds) next.add(id);
+			}
+			return next;
+		});
+	}, [activeHabits]);
+
+	const selectAll = useCallback(() => {
+		setSelectedHabitIds(null);
+	}, []);
+
+	const selectNone = useCallback(() => {
+		setSelectedHabitIds(new Set());
+	}, []);
 
 	// ── Week data ──────────────────────────────────────────────────────
 	const weekStart = useMemo(() => mondayOfWeek(anchor), [anchor]);
@@ -87,20 +138,19 @@ export function CalendarScreen() {
 		calView === 'Week' ? weekDateStr : undefined,
 	);
 
+	const filteredWeekData = useMemo(
+		() => weekData?.filter((item) => visibleIds.has(item.habit.id)),
+		[weekData, visibleIds],
+	);
+
 	// ── Month data ─────────────────────────────────────────────────────
 	const monthYear = anchor.getFullYear();
 	const monthIdx = anchor.getMonth();
 	const monthStr = isoMonth(anchor);
 
-	const { data: allHabits } = useAllHabits();
-	const sectionedHabits = useMemo(
-		() => (allHabits ?? []).filter((h) => h.section != null && h.is_active),
-		[allHabits],
-	);
-
 	const monthQueries = useQueries({
 		queries: calView === 'Month'
-			? sectionedHabits.map((h) => ({
+			? activeHabits.map((h) => ({
 				queryKey: ['calendar', 'monthly', h.id, monthStr] as const,
 				queryFn: () => calendar.monthly(h.id, monthStr),
 				staleTime: 1000 * 30,
@@ -110,7 +160,8 @@ export function CalendarScreen() {
 	const monthLoading = calView === 'Month' && monthQueries.some((q) => q.isLoading);
 	const monthResults: MonthlyCalendarResponse[] = monthQueries
 		.filter((q) => q.data != null)
-		.map((q) => q.data!);
+		.map((q) => q.data!)
+		.filter((r) => visibleIds.has(r.habit.id));
 
 	// ── Navigation ─────────────────────────────────────────────────────
 	const onPrev = () => {
@@ -139,30 +190,40 @@ export function CalendarScreen() {
 		return `${MONTH_NAMES[monthIdx]} ${monthYear}`;
 	}, [calView, weekStart, monthIdx, monthYear]);
 
+	const filterActive = selectedHabitIds != null && selectedHabitIds.size !== activeHabits.length;
+
 	// ── Render ──────────────────────────────────────────────────────────
 	return (
 		<View style={[styles.root, { backgroundColor: colors.paper }]}>
-			{/* View toggle */}
-			<View style={[styles.toggleRow, { backgroundColor: colors.chip }]}>
-				{(['Week', 'Month'] as CalView[]).map((v) => (
-					<Pressable
-						key={v}
-						onPress={() => setCalView(v)}
-						style={[
-							styles.toggleBtn,
-							calView === v && { backgroundColor: colors.card },
-						]}
-					>
-						<Text
+			{/* View toggle + filter button */}
+			<View style={styles.topRow}>
+				<View style={[styles.toggleRow, { backgroundColor: colors.chip }]}>
+					{(['Week', 'Month'] as CalView[]).map((v) => (
+						<Pressable
+							key={v}
+							onPress={() => setCalView(v)}
 							style={[
-								styles.toggleLabel,
-								{ color: calView === v ? colors.ink : colors.muted },
+								styles.toggleBtn,
+								calView === v && { backgroundColor: colors.card },
 							]}
 						>
-							{v}
-						</Text>
-					</Pressable>
-				))}
+							<Text
+								style={[
+									styles.toggleLabel,
+									{ color: calView === v ? colors.ink : colors.muted },
+								]}
+							>
+								{v}
+							</Text>
+						</Pressable>
+					))}
+				</View>
+				<Pressable
+					style={[styles.filterBtn, { borderColor: filterActive ? colors.accent : colors.line }]}
+					onPress={() => setFilterOpen(true)}
+				>
+					<Icon name="list" size={18} color={filterActive ? colors.accent : colors.ink} />
+				</Pressable>
 			</View>
 
 			{/* Period nav */}
@@ -189,9 +250,9 @@ export function CalendarScreen() {
 				contentContainerStyle={styles.scrollContent}
 				showsVerticalScrollIndicator={false}
 			>
-				{calView === 'Week' && weekData && (
+				{calView === 'Week' && filteredWeekData && (
 					<WeekView
-						items={weekData}
+						items={filteredWeekData}
 						weekDates={weekDates}
 						todayStr={todayStr}
 						hexMap={hexMap}
@@ -209,6 +270,20 @@ export function CalendarScreen() {
 					/>
 				)}
 			</ScrollView>
+
+			<FilterModal
+				visible={filterOpen}
+				onClose={() => setFilterOpen(false)}
+				habits={activeHabits}
+				categories={categoriesData ?? []}
+				selectedIds={visibleIds}
+				onToggleHabit={toggleHabit}
+				onToggleCategory={toggleCategory}
+				onSelectAll={selectAll}
+				onSelectNone={selectNone}
+				hexMap={hexMap}
+				colors={colors}
+			/>
 		</View>
 	);
 }
@@ -228,12 +303,26 @@ function WeekView({
 	hexMap: Record<string, string>;
 	colors: any;
 }) {
+	const FREQ_SECTIONS: { key: string; label: string }[] = [
+		{ key: 'DAILY',    label: 'Daily' },
+		{ key: 'WEEKLY',   label: 'Weekly' },
+		{ key: 'MONTHLY',  label: 'Monthly' },
+		{ key: 'YEARLY',   label: 'Yearly' },
+		{ key: 'INTERVAL', label: 'Interval' },
+		{ key: 'AVOID',    label: 'Avoid' },
+	];
+
 	const grouped = useMemo(() => {
 		const map: Record<string, WeeklyCalendarItem[]> = {};
-		for (const s of SECTIONS) map[s.key] = [];
+		for (const s of FREQ_SECTIONS) map[s.key] = [];
 		for (const item of items) {
-			const sec = item.habit.section;
-			if (sec && map[sec]) map[sec].push(item);
+			if (item.habit.mode === 'AVOID') {
+				map['AVOID'].push(item);
+			} else {
+				const freq = item.habit.frequency;
+				if (map[freq]) map[freq].push(item);
+				else map['DAILY'].push(item);
+			}
 		}
 		return map;
 	}, [items]);
@@ -265,7 +354,7 @@ function WeekView({
 				})}
 			</View>
 
-			{SECTIONS.map(({ key, label }) => {
+			{FREQ_SECTIONS.map(({ key, label }) => {
 				const sectionItems = grouped[key];
 				if (!sectionItems || sectionItems.length === 0) return null;
 				return (
@@ -422,6 +511,251 @@ function MonthView({
 	);
 }
 
+// ── Filter Modal ──────────────────────────────────────────────────────
+
+function FilterModal({
+	visible,
+	onClose,
+	habits,
+	categories,
+	selectedIds,
+	onToggleHabit,
+	onToggleCategory,
+	onSelectAll,
+	onSelectNone,
+	hexMap,
+	colors,
+}: {
+	visible: boolean;
+	onClose: () => void;
+	habits: HabitResponse[];
+	categories: { id: string; name: string }[];
+	selectedIds: Set<string>;
+	onToggleHabit: (id: string) => void;
+	onToggleCategory: (categoryId: string) => void;
+	onSelectAll: () => void;
+	onSelectNone: () => void;
+	hexMap: Record<string, string>;
+	colors: any;
+}) {
+	const categoryMap = useMemo(() => {
+		const map = new Map<string, string>();
+		for (const c of categories) map.set(c.id, c.name);
+		return map;
+	}, [categories]);
+
+	const habitsByCategory = useMemo(() => {
+		const groups: { categoryId: string | null; categoryName: string; habits: HabitResponse[] }[] = [];
+		const catGroups = new Map<string, HabitResponse[]>();
+		const uncategorized: HabitResponse[] = [];
+
+		for (const h of habits) {
+			if (h.category_id) {
+				const list = catGroups.get(h.category_id) ?? [];
+				list.push(h);
+				catGroups.set(h.category_id, list);
+			} else {
+				uncategorized.push(h);
+			}
+		}
+
+		for (const c of categories) {
+			const list = catGroups.get(c.id);
+			if (list && list.length > 0) {
+				groups.push({ categoryId: c.id, categoryName: c.name, habits: list });
+			}
+		}
+		if (uncategorized.length > 0) {
+			groups.push({ categoryId: null, categoryName: 'Uncategorized', habits: uncategorized });
+		}
+
+		return groups;
+	}, [habits, categories]);
+
+	const isCategorySelected = useCallback((categoryId: string) => {
+		const catHabits = habits.filter((h) => h.category_id === categoryId);
+		return catHabits.length > 0 && catHabits.every((h) => selectedIds.has(h.id));
+	}, [habits, selectedIds]);
+
+	if (!visible) return null;
+
+	return (
+		<Modal visible={visible} animationType="slide" transparent>
+			<Pressable style={fStyles.overlay} onPress={onClose}>
+				<Pressable style={[fStyles.sheet, { backgroundColor: colors.paper }]}>
+					<View style={fStyles.header}>
+						<Text style={[fStyles.title, { color: colors.ink }]}>Filter Habits</Text>
+						<Pressable onPress={onClose} hitSlop={8}>
+							<Icon name="close" size={20} color={colors.ink} />
+						</Pressable>
+					</View>
+
+					<View style={fStyles.quickActions}>
+						<Pressable
+							style={[fStyles.quickBtn, { borderColor: colors.line }]}
+							onPress={onSelectAll}
+						>
+							<Text style={[fStyles.quickBtnText, { color: colors.ink }]}>All</Text>
+						</Pressable>
+						<Pressable
+							style={[fStyles.quickBtn, { borderColor: colors.line }]}
+							onPress={onSelectNone}
+						>
+							<Text style={[fStyles.quickBtnText, { color: colors.ink }]}>None</Text>
+						</Pressable>
+					</View>
+
+					<ScrollView
+						style={fStyles.list}
+						showsVerticalScrollIndicator={false}
+					>
+						{habitsByCategory.map((group) => (
+							<View key={group.categoryId ?? '_none'} style={fStyles.group}>
+								{group.categoryId ? (
+									<Pressable
+										style={fStyles.categoryRow}
+										onPress={() => onToggleCategory(group.categoryId!)}
+									>
+										<View style={[
+											fStyles.checkbox,
+											{ borderColor: colors.line },
+											isCategorySelected(group.categoryId) && { backgroundColor: colors.accent, borderColor: colors.accent },
+										]}>
+											{isCategorySelected(group.categoryId) && (
+												<Icon name="check" size={12} color={colors.paper} strokeWidth={3} />
+											)}
+										</View>
+										<Text style={[fStyles.categoryName, { color: colors.ink }]}>
+											{group.categoryName}
+										</Text>
+									</Pressable>
+								) : (
+									<Text style={[fStyles.categoryName, fStyles.categoryLabel, { color: colors.muted }]}>
+										{group.categoryName}
+									</Text>
+								)}
+
+								{group.habits.map((h) => {
+									const selected = selectedIds.has(h.id);
+									const hex = hexMap[h.color_key ?? ''] ?? colors.accent;
+									return (
+										<Pressable
+											key={h.id}
+											style={fStyles.habitRow}
+											onPress={() => onToggleHabit(h.id)}
+										>
+											<View style={[
+												fStyles.checkbox,
+												{ borderColor: colors.line },
+												selected && { backgroundColor: hex, borderColor: hex },
+											]}>
+												{selected && (
+													<Icon name="check" size={12} color={colors.paper} strokeWidth={3} />
+												)}
+											</View>
+											<View style={[fStyles.colorDot, { backgroundColor: hex }]} />
+											<Text style={[fStyles.habitName, { color: colors.ink }]}>
+												{h.name}
+											</Text>
+										</Pressable>
+									);
+								})}
+							</View>
+						))}
+					</ScrollView>
+				</Pressable>
+			</Pressable>
+		</Modal>
+	);
+}
+
+const fStyles = StyleSheet.create({
+	overlay: {
+		flex: 1,
+		backgroundColor: 'rgba(0,0,0,0.4)',
+		justifyContent: 'flex-end',
+	},
+	sheet: {
+		maxHeight: '75%',
+		borderTopLeftRadius: 16,
+		borderTopRightRadius: 16,
+		paddingTop: 16,
+		paddingBottom: 32,
+	},
+	header: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'center',
+		paddingHorizontal: 20,
+		marginBottom: 12,
+	},
+	title: {
+		fontFamily: FONTS.display.semibold,
+		fontSize: 18,
+		letterSpacing: -0.3,
+	},
+	quickActions: {
+		flexDirection: 'row',
+		gap: 8,
+		paddingHorizontal: 20,
+		marginBottom: 16,
+	},
+	quickBtn: {
+		paddingVertical: 6,
+		paddingHorizontal: 14,
+		borderRadius: RADII.default,
+		borderWidth: 1,
+	},
+	quickBtnText: {
+		fontFamily: FONTS.body.medium,
+		fontSize: 13,
+	},
+	list: {
+		paddingHorizontal: 20,
+	},
+	group: {
+		marginBottom: 16,
+	},
+	categoryRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 10,
+		paddingVertical: 8,
+	},
+	categoryLabel: {
+		paddingVertical: 8,
+	},
+	categoryName: {
+		fontFamily: FONTS.body.semibold,
+		fontSize: 14,
+	},
+	habitRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 10,
+		paddingVertical: 7,
+		paddingLeft: 8,
+	},
+	habitName: {
+		fontFamily: FONTS.body.regular,
+		fontSize: 14,
+		flex: 1,
+	},
+	checkbox: {
+		width: 20,
+		height: 20,
+		borderRadius: 4,
+		borderWidth: 1.5,
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+	colorDot: {
+		width: 8,
+		height: 8,
+		borderRadius: 4,
+	},
+});
+
 // ── Styles ─────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
@@ -429,11 +763,27 @@ const styles = StyleSheet.create({
 		flex: 1,
 	},
 
+	// Top row
+	topRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 10,
+		paddingHorizontal: 16,
+		marginTop: 12,
+	},
+	filterBtn: {
+		width: 36,
+		height: 36,
+		borderRadius: RADII.default,
+		borderWidth: 1,
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+
 	// Toggle
 	toggleRow: {
+		flex: 1,
 		flexDirection: 'row',
-		marginHorizontal: 16,
-		marginTop: 12,
 		borderRadius: RADII.default,
 		padding: 2,
 	},

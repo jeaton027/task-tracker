@@ -496,10 +496,9 @@ async def get_aggregate_stats(
 
 	for habit in active_habits:
 		habit_logs = logs_by_habit.get(habit.id, {})
-		age_days = (today - habit.start_date).days
-		is_young = age_days < MIN_AGE_DAYS
-
 		effective_start = min(min(habit_logs.keys()), habit.start_date) if habit_logs else habit.start_date
+		age_days = (today - effective_start).days
+		is_young = age_days < MIN_AGE_DAYS
 		rate = None if is_young else _habit_completion_rate(
 			habit, habit_logs, range_start, range_end, today, vacation_dates,
 			override_start=effective_start,
@@ -581,26 +580,35 @@ async def get_trends(
 	range_start = start_date or (today - timedelta(days=12 * 7))
 
 	all_habits = await habit_service.list_habits(db, user_id)
-	active_habits = [
+	candidate_habits = [
 		h for h in all_habits
 		if h.is_active and not h.is_archived
 		and h.frequency != HabitFrequency.CUSTOM
 		and h.mode == HabitMode.DO
-		and (today - h.start_date).days >= MIN_AGE_DAYS
 	]
 	if habit_ids:
 		id_set = set(habit_ids)
-		active_habits = [h for h in active_habits if h.id in id_set]
+		candidate_habits = [h for h in candidate_habits if h.id in id_set]
 
-	if not active_habits:
+	if not candidate_habits:
 		return TrendsResponse()
 
 	all_logs = await habit_log_repository.get_by_habit_ids_and_date_range(
-		db, [h.id for h in active_habits], range_start, today,
+		db, [h.id for h in candidate_habits], date(2000, 1, 1), today,
 	)
 	logs_by_habit: dict[uuid.UUID, dict[date, float]] = defaultdict(lambda: defaultdict(float))
 	for log in all_logs:
 		logs_by_habit[log.habit_id][log.log_date] += log.amount
+
+	def _effective_age(h: Habit) -> int:
+		hl = logs_by_habit.get(h.id)
+		eff = min(min(hl.keys()), h.start_date) if hl else h.start_date
+		return (today - eff).days
+
+	active_habits = [h for h in candidate_habits if _effective_age(h) >= MIN_AGE_DAYS]
+
+	if not active_habits:
+		return TrendsResponse()
 
 	vacation_dates = await vacation_service.get_user_vacation_dates(db, user_id)
 
@@ -622,11 +630,13 @@ async def get_trends(
 		rate_sum = 0.0
 		rate_count = 0
 		for habit in active_habits:
-			if habit.start_date > week_end:
-				continue
 			habit_logs = logs_by_habit.get(habit.id, {})
+			eff = min(min(habit_logs.keys()), habit.start_date) if habit_logs else habit.start_date
+			if eff > week_end:
+				continue
 			rate = _habit_completion_rate(
 				habit, habit_logs, week_start, week_end, today, vacation_dates,
+				override_start=eff,
 			)
 			if rate is not None:
 				rate_sum += rate

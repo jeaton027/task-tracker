@@ -256,7 +256,7 @@ export function EditHabitScreen({ visible, habitId, onClose }: EditHabitScreenPr
 
 	return (
 		<Modal visible={visible} animationType="slide" onRequestClose={dismiss}>
-			<SafeAreaView style={[formStyles.root, { backgroundColor: colors.paper }]} edges={['top']}>
+			<SafeAreaView style={[formStyles.root, { backgroundColor: colors.paper }]} edges={['top', 'bottom']}>
 				<KeyboardAvoidingView
 					style={formStyles.flex}
 					behavior={Platform.OS === 'ios' ? 'padding' : undefined}

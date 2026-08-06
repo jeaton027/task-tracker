@@ -38,6 +38,7 @@ import { RoutineScreen } from './RoutineScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { CalendarScreen } from './CalendarScreen';
 import { StatsScreen } from './StatsScreen';
+import { TimerScreen } from './TimerScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FONTS, useTheme } from '../theme';
 import { isoDate, weekStartDate } from '../utils/dates';
@@ -68,6 +69,7 @@ export function TodayScreen() {
 	const [allHabitsOpen, setAllHabitsOpen] = useState(false);
 	const [routineScreenId, setRoutineScreenId] = useState<string | null>(null);
 	const [routineLastPlayed, setRoutineLastPlayed] = useState<Record<string, number>>({});
+	const [timerOpen, setTimerOpen] = useState(false);
 	const [filters, setFilters] = useState<DrawerFilters>({ timeOfDay: null, categoryId: null, routineId: null });
 
 	useEffect(() => {
@@ -242,7 +244,7 @@ export function TodayScreen() {
 				<CalendarScreen />
 			) : (
 			<>
-			<AppHeader onMenuPress={() => setDrawerOpen(true)} />
+			<AppHeader onMenuPress={() => setDrawerOpen(true)} onTimerPress={() => setTimerOpen(true)} />
 			<ViewToggle view={view} onChange={setView} />
 			<PeriodNav
 				view={view}
@@ -394,6 +396,11 @@ export function TodayScreen() {
 				visible={routineScreenId != null}
 				routineId={routineScreenId}
 				onClose={() => onRoutineClose(routineScreenId)}
+			/>
+
+			<TimerScreen
+				visible={timerOpen}
+				onClose={() => setTimerOpen(false)}
 			/>
 		</SafeAreaView>
 	);

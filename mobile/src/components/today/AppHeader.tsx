@@ -5,9 +5,10 @@ import { FONTS, RADII, useTheme } from '../../theme';
 
 interface AppHeaderProps {
 	onMenuPress?: () => void;
+	onTimerPress?: () => void;
 }
 
-export function AppHeader({ onMenuPress }: AppHeaderProps) {
+export function AppHeader({ onMenuPress, onTimerPress }: AppHeaderProps) {
 	const { colors } = useTheme();
 
 	const iconButton = {
@@ -23,7 +24,7 @@ export function AppHeader({ onMenuPress }: AppHeaderProps) {
 
 			<Text style={[styles.title, { color: colors.ink }]}>Habits</Text>
 
-			<Pressable style={[styles.iconButton, iconButton]}>
+			<Pressable style={[styles.iconButton, iconButton]} onPress={onTimerPress}>
 				<Icon name="timer" size={20} color={colors.ink} />
 			</Pressable>
 		</View>
